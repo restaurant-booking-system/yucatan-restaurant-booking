@@ -1,0 +1,433 @@
+import { useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ChevronLeft, Calendar, Users, Heart, Gift, Briefcase, PartyPopper, MessageSquare, CreditCard, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import TableMap from '@/components/TableMap';
+import TimeSlotPicker from '@/components/TimeSlotPicker';
+import { restaurants, mesas, timeSlots } from '@/data/mockData';
+import { Mesa } from '@/types/restaurant';
+import { cn } from '@/lib/utils';
+
+type ReservationStep = 'date' | 'time' | 'table' | 'details' | 'confirm';
+
+const occasions = [
+  { id: 'romantic', label: 'Cena romántica', icon: Heart },
+  { id: 'birthday', label: 'Cumpleaños', icon: PartyPopper },
+  { id: 'business', label: 'Reunión de negocios', icon: Briefcase },
+  { id: 'other', label: 'Ocasión especial', icon: Gift },
+];
+
+const ReservationPage = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const restaurant = restaurants.find(r => r.id === id);
+
+  const [step, setStep] = useState<ReservationStep>('date');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
+  const [guestCount, setGuestCount] = useState(2);
+  const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
+  const [specialRequest, setSpecialRequest] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+
+  if (!restaurant) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="font-display text-2xl font-bold mb-4">Restaurante no encontrado</h1>
+          <Link to="/restaurantes">
+            <Button>Volver a restaurantes</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const requiresDeposit = selectedTime ? timeSlots.find(s => s.time === selectedTime)?.requiresDeposit : false;
+  const depositAmount = selectedTime ? timeSlots.find(s => s.time === selectedTime)?.depositAmount : 0;
+
+  const handleNext = () => {
+    const steps: ReservationStep[] = ['date', 'time', 'table', 'details', 'confirm'];
+    const currentIndex = steps.indexOf(step);
+    if (currentIndex < steps.length - 1) {
+      setStep(steps[currentIndex + 1]);
+    }
+  };
+
+  const handleBack = () => {
+    const steps: ReservationStep[] = ['date', 'time', 'table', 'details', 'confirm'];
+    const currentIndex = steps.indexOf(step);
+    if (currentIndex > 0) {
+      setStep(steps[currentIndex - 1]);
+    }
+  };
+
+  const handleConfirm = async () => {
+    setIsSubmitting(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setIsSubmitting(false);
+    setIsConfirmed(true);
+  };
+
+  const canProceed = () => {
+    switch (step) {
+      case 'date': return !!selectedDate;
+      case 'time': return !!selectedTime;
+      case 'table': return !!selectedMesa;
+      case 'details': return guestCount >= 1;
+      default: return true;
+    }
+  };
+
+  const stepTitles: Record<ReservationStep, string> = {
+    date: 'Selecciona la fecha',
+    time: 'Elige el horario',
+    table: 'Escoge tu mesa',
+    details: 'Detalles de la reserva',
+    confirm: 'Confirmar reserva',
+  };
+
+  if (isConfirmed) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="pt-28 pb-20">
+          <div className="container mx-auto px-4 max-w-2xl">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="text-center"
+            >
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-success/20 flex items-center justify-center">
+                <Check className="h-12 w-12 text-success" />
+              </div>
+              <h1 className="font-display text-3xl font-bold mb-4">¡Reserva confirmada!</h1>
+              <p className="text-muted-foreground mb-8">
+                Tu reserva en {restaurant.name} ha sido registrada exitosamente.
+              </p>
+
+              <div className="bg-card rounded-2xl p-6 shadow-card text-left mb-8">
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Restaurante</span>
+                    <span className="font-medium">{restaurant.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Fecha</span>
+                    <span className="font-medium">{selectedDate?.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Hora</span>
+                    <span className="font-medium">{selectedTime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Mesa</span>
+                    <span className="font-medium">Mesa {selectedMesa?.number} ({selectedMesa?.capacity} personas)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Personas</span>
+                    <span className="font-medium">{guestCount}</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-border">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Código de reserva
+                  </p>
+                  <p className="text-2xl font-bold text-center text-primary mt-2">
+                    RES-{Math.random().toString(36).substr(2, 8).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Link to="/mis-reservas" className="flex-1">
+                  <Button variant="outline" className="w-full">Ver mis reservas</Button>
+                </Link>
+                <Link to="/" className="flex-1">
+                  <Button className="w-full">Volver al inicio</Button>
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+
+      <main className="pt-28 pb-20">
+        <div className="container mx-auto px-4 max-w-4xl">
+          {/* Back & Progress */}
+          <div className="mb-8">
+            <button
+              onClick={() => step === 'date' ? navigate(`/restaurante/${id}`) : handleBack()}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4"
+            >
+              <ChevronLeft className="h-5 w-5" />
+              {step === 'date' ? 'Volver al restaurante' : 'Paso anterior'}
+            </button>
+
+            {/* Progress Bar */}
+            <div className="flex items-center gap-2">
+              {['date', 'time', 'table', 'details', 'confirm'].map((s, i) => (
+                <div
+                  key={s}
+                  className={cn(
+                    'h-2 rounded-full transition-all duration-300 flex-1',
+                    ['date', 'time', 'table', 'details', 'confirm'].indexOf(step) >= i
+                      ? 'bg-primary'
+                      : 'bg-muted'
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Restaurant Mini Card */}
+          <div className="bg-card rounded-xl p-4 shadow-soft mb-8 flex items-center gap-4">
+            <img
+              src={restaurant.image}
+              alt={restaurant.name}
+              className="w-16 h-16 rounded-lg object-cover"
+            />
+            <div>
+              <h2 className="font-display font-semibold">{restaurant.name}</h2>
+              <p className="text-sm text-muted-foreground">{restaurant.address}</p>
+            </div>
+          </div>
+
+          {/* Step Title */}
+          <motion.h1
+            key={step}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="font-display text-2xl md:text-3xl font-bold mb-6"
+          >
+            {stepTitles[step]}
+          </motion.h1>
+
+          {/* Step Content */}
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            {step === 'date' && (
+              <div className="bg-card rounded-2xl p-6 shadow-card">
+                <div className="flex items-center gap-2 mb-4">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  <Label className="text-base font-medium">¿Cuándo deseas visitarnos?</Label>
+                </div>
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  disabled={(date) => date < new Date()}
+                  className="rounded-xl border p-4"
+                />
+              </div>
+            )}
+
+            {step === 'time' && (
+              <TimeSlotPicker
+                timeSlots={timeSlots}
+                selectedTime={selectedTime}
+                onSelectTime={setSelectedTime}
+              />
+            )}
+
+            {step === 'table' && (
+              <div className="space-y-6">
+                <div className="bg-card rounded-2xl p-6 shadow-card">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Users className="h-5 w-5 text-primary" />
+                    <Label className="text-base font-medium">¿Cuántas personas?</Label>
+                  </div>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => setGuestCount(num)}
+                        className={cn(
+                          'w-12 h-12 rounded-xl font-semibold transition-all duration-200',
+                          guestCount === num
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted hover:bg-muted/80'
+                        )}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <TableMap
+                  mesas={mesas}
+                  selectedMesa={selectedMesa}
+                  onSelectMesa={setSelectedMesa}
+                  guestCount={guestCount}
+                />
+              </div>
+            )}
+
+            {step === 'details' && (
+              <div className="space-y-6">
+                {/* Occasion */}
+                <div className="bg-card rounded-2xl p-6 shadow-card">
+                  <Label className="text-base font-medium mb-4 block">
+                    ¿Es una ocasión especial? (opcional)
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {occasions.map((occasion) => (
+                      <button
+                        key={occasion.id}
+                        onClick={() => setSelectedOccasion(
+                          selectedOccasion === occasion.id ? null : occasion.id
+                        )}
+                        className={cn(
+                          'p-4 rounded-xl border-2 transition-all duration-200 text-center',
+                          selectedOccasion === occasion.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-primary/50'
+                        )}
+                      >
+                        <occasion.icon className={cn(
+                          'h-6 w-6 mx-auto mb-2',
+                          selectedOccasion === occasion.id ? 'text-primary' : 'text-muted-foreground'
+                        )} />
+                        <span className="text-sm font-medium">{occasion.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Special Request */}
+                <div className="bg-card rounded-2xl p-6 shadow-card">
+                  <div className="flex items-center gap-2 mb-4">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    <Label className="text-base font-medium">
+                      ¿Deseas agregar algo a tu mesa? (opcional)
+                    </Label>
+                  </div>
+                  <Textarea
+                    placeholder="Ej: Cumpleaños sorpresa, alergias alimentarias, silla para bebé..."
+                    value={specialRequest}
+                    onChange={(e) => setSpecialRequest(e.target.value)}
+                    className="min-h-[100px] resize-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {step === 'confirm' && (
+              <div className="space-y-6">
+                {/* Summary */}
+                <div className="bg-card rounded-2xl p-6 shadow-card">
+                  <h3 className="font-display text-lg font-semibold mb-4">Resumen de tu reserva</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between py-2 border-b border-border">
+                      <span className="text-muted-foreground">Fecha</span>
+                      <span className="font-medium">
+                        {selectedDate?.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-border">
+                      <span className="text-muted-foreground">Hora</span>
+                      <span className="font-medium">{selectedTime}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-border">
+                      <span className="text-muted-foreground">Mesa</span>
+                      <span className="font-medium">Mesa {selectedMesa?.number}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-border">
+                      <span className="text-muted-foreground">Personas</span>
+                      <span className="font-medium">{guestCount}</span>
+                    </div>
+                    {selectedOccasion && (
+                      <div className="flex justify-between py-2 border-b border-border">
+                        <span className="text-muted-foreground">Ocasión</span>
+                        <span className="font-medium">
+                          {occasions.find(o => o.id === selectedOccasion)?.label}
+                        </span>
+                      </div>
+                    )}
+                    {specialRequest && (
+                      <div className="py-2">
+                        <span className="text-muted-foreground block mb-1">Solicitud especial</span>
+                        <span className="font-medium">{specialRequest}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Deposit Notice */}
+                {requiresDeposit && (
+                  <div className="bg-warning/10 rounded-2xl p-6 border border-warning/20">
+                    <div className="flex items-start gap-4">
+                      <CreditCard className="h-6 w-6 text-warning mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-foreground">Anticipo requerido</h4>
+                        <p className="text-muted-foreground mt-1">
+                          Este horario requiere un anticipo de <span className="font-bold text-foreground">${depositAmount} MXN</span> para confirmar la reserva.
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          El anticipo se descontará de tu cuenta al finalizar tu visita.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+
+          {/* Navigation Buttons */}
+          <div className="flex gap-4">
+            {step !== 'date' && (
+              <Button variant="outline" onClick={handleBack} className="flex-1">
+                Anterior
+              </Button>
+            )}
+            {step !== 'confirm' ? (
+              <Button
+                onClick={handleNext}
+                disabled={!canProceed()}
+                className="flex-1 btn-hero"
+              >
+                Continuar
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConfirm}
+                disabled={isSubmitting}
+                className="flex-1 btn-hero"
+              >
+                {isSubmitting ? 'Confirmando...' : requiresDeposit ? `Pagar anticipo y confirmar` : 'Confirmar reserva'}
+              </Button>
+            )}
+          </div>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+};
+
+export default ReservationPage;
