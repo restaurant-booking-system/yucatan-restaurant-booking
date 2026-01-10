@@ -109,9 +109,9 @@ export const menuItems: MenuItem[] = [
 ];
 
 export const offers: Offer[] = [
-  { id: 'o1', title: '20% Cena Romántica', description: 'Válido para parejas en mesas para 2', discount: '20%', validUntil: '2024-02-14', restaurantId: '1' },
-  { id: 'o2', title: '2x1 Cocktails', description: 'En toda nuestra carta de cocktails', discount: '2x1', validUntil: '2024-01-31', restaurantId: '3' },
-  { id: 'o3', title: 'Menú Degustación', description: '7 tiempos con maridaje incluido', discount: '$1,500', validUntil: '2024-02-28', restaurantId: '4' },
+  { id: 'o1', title: '20% Cena Romántica', description: 'Válido para parejas en mesas para 2', discount: '20%', validUntil: '2026-02-14', restaurantId: '1' },
+  { id: 'o2', title: '2x1 Cocktails', description: 'En toda nuestra carta de cocktails', discount: '2x1', validUntil: '2026-01-31', restaurantId: '3' },
+  { id: 'o3', title: 'Menú Degustación', description: '7 tiempos con maridaje incluido', discount: '$1,500', validUntil: '2026-02-28', restaurantId: '4' },
 ];
 
 export const zones = ['Todos', 'Centro', 'Montejo', 'Norte'];

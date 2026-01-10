@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Calendar, Users, Heart, Gift, Briefcase, PartyPopper, MessageSquare, CreditCard, Check } from 'lucide-react';
+import { ChevronLeft, Calendar, Users, Heart, Gift, Briefcase, PartyPopper, MessageSquare, CreditCard, Check, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,7 @@ import TimeSlotPicker from '@/components/TimeSlotPicker';
 import { restaurants, mesas, timeSlots } from '@/data/mockData';
 import { Mesa } from '@/types/restaurant';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 type ReservationStep = 'date' | 'time' | 'table' | 'details' | 'confirm';
 
@@ -27,6 +28,7 @@ const occasions = [
 const ReservationPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const restaurant = restaurants.find(r => r.id === id);
 
   const [step, setStep] = useState<ReservationStep>('date');
@@ -38,6 +40,52 @@ const ReservationPage = () => {
   const [specialRequest, setSpecialRequest] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+
+  // Redirect to login if not authenticated
+  if (!isLoading && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="pt-28 pb-20">
+          <div className="container mx-auto px-4 max-w-lg">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card rounded-2xl p-8 shadow-card text-center"
+            >
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <LogIn className="h-10 w-10 text-primary" />
+              </div>
+              <h1 className="font-display text-2xl font-bold mb-4">Inicia sesión para reservar</h1>
+              <p className="text-muted-foreground mb-8">
+                Para hacer una reserva en {restaurant?.name || 'nuestros restaurantes'}, necesitas iniciar sesión o crear una cuenta.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={() => navigate('/login', { state: { from: `/reservar/${id}` } })}
+                  className="flex-1"
+                >
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Iniciar Sesión
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/restaurante/${id}`)}
+                  className="flex-1"
+                >
+                  Volver al restaurante
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-6">
+                ¿No tienes cuenta? <Link to="/login" state={{ from: `/reservar/${id}` }} className="text-primary hover:underline">Regístrate aquí</Link>
+              </p>
+            </motion.div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   if (!restaurant) {
     return (

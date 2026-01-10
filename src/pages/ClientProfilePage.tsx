@@ -1,0 +1,448 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { 
+  User, Mail, Phone, MapPin, Bell, Heart, Star, 
+  ChevronRight, Settings, LogOut, Camera, Shield,
+  Calendar, Award, Edit2, Check, X
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { restaurants } from '@/data/mockData';
+
+// Mock user data
+const mockUser = {
+  id: 'user-1',
+  name: 'María García',
+  email: 'maria.garcia@email.com',
+  phone: '+52 999 123 4567',
+  avatar: '',
+  memberSince: '2023-06-15',
+  totalReservations: 24,
+  favoriteRestaurants: ['1', '3'],
+  preferredZone: 'Centro',
+  preferredCuisine: 'Yucateca',
+  notifications: {
+    email: true,
+    push: true,
+    sms: false,
+    marketing: true,
+  },
+};
+
+const achievements = [
+  { id: 1, name: 'Primera Reserva', icon: Calendar, earned: true },
+  { id: 2, name: 'Foodie Experto', icon: Award, earned: true },
+  { id: 3, name: '10 Restaurantes', icon: Star, earned: true },
+  { id: 4, name: 'VIP', icon: Shield, earned: false },
+];
+
+const ClientProfilePage = () => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [userData, setUserData] = useState(mockUser);
+  const [notifications, setNotifications] = useState(mockUser.notifications);
+
+  const favoriteRestaurantsList = restaurants.filter(r => 
+    userData.favoriteRestaurants.includes(r.id)
+  );
+
+  const handleSave = () => {
+    setIsEditing(false);
+    // Here would save to backend
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      
+      <main className="pt-20 pb-16">
+        {/* Hero Section */}
+        <div className="relative bg-gradient-to-b from-primary/20 to-background">
+          <div className="container mx-auto px-4 py-12">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col md:flex-row items-center gap-8"
+            >
+              {/* Avatar Section */}
+              <div className="relative group">
+                <Avatar className="w-32 h-32 border-4 border-white shadow-elevated">
+                  <AvatarImage src={userData.avatar} />
+                  <AvatarFallback className="text-3xl font-display bg-primary text-primary-foreground">
+                    {userData.name.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <button className="absolute bottom-0 right-0 p-2 bg-secondary text-secondary-foreground rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* User Info */}
+              <div className="text-center md:text-left flex-1">
+                <h1 className="text-3xl font-display font-bold mb-2">
+                  {userData.name}
+                </h1>
+                <p className="text-muted-foreground mb-4">
+                  Miembro desde {new Date(userData.memberSince).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+                </p>
+                <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+                  <Badge variant="secondary" className="gap-2 px-4 py-2">
+                    <Calendar className="w-4 h-4" />
+                    {userData.totalReservations} reservaciones
+                  </Badge>
+                  <Badge variant="outline" className="gap-2 px-4 py-2">
+                    <Heart className="w-4 h-4" />
+                    {userData.favoriteRestaurants.length} favoritos
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                {isEditing ? (
+                  <>
+                    <Button onClick={handleSave} className="gap-2">
+                      <Check className="w-4 h-4" />
+                      Guardar
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsEditing(false)} className="gap-2">
+                      <X className="w-4 h-4" />
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setIsEditing(true)} variant="outline" className="gap-2">
+                    <Edit2 className="w-4 h-4" />
+                    Editar perfil
+                  </Button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="container mx-auto px-4 py-8">
+          <Tabs defaultValue="info" className="space-y-8">
+            <TabsList className="grid grid-cols-4 max-w-2xl mx-auto">
+              <TabsTrigger value="info" className="gap-2">
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Información</span>
+              </TabsTrigger>
+              <TabsTrigger value="favorites" className="gap-2">
+                <Heart className="w-4 h-4" />
+                <span className="hidden sm:inline">Favoritos</span>
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="gap-2">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Preferencias</span>
+              </TabsTrigger>
+              <TabsTrigger value="security" className="gap-2">
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline">Seguridad</span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Info Tab */}
+            <TabsContent value="info">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="max-w-2xl mx-auto space-y-6"
+              >
+                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
+                  <h3 className="text-xl font-display font-semibold">Datos Personales</h3>
+                  
+                  <div className="grid gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="name" className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        Nombre completo
+                      </Label>
+                      <Input
+                        id="name"
+                        value={userData.name}
+                        onChange={(e) => setUserData({...userData, name: e.target.value})}
+                        disabled={!isEditing}
+                        className="bg-background"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        Correo electrónico
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={userData.email}
+                        onChange={(e) => setUserData({...userData, email: e.target.value})}
+                        disabled={!isEditing}
+                        className="bg-background"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="phone" className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        Teléfono
+                      </Label>
+                      <Input
+                        id="phone"
+                        value={userData.phone}
+                        onChange={(e) => setUserData({...userData, phone: e.target.value})}
+                        disabled={!isEditing}
+                        className="bg-background"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Achievements */}
+                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
+                  <h3 className="text-xl font-display font-semibold">Logros</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {achievements.map((achievement) => (
+                      <div
+                        key={achievement.id}
+                        className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
+                          achievement.earned 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-muted opacity-50'
+                        }`}
+                      >
+                        <achievement.icon className={`w-8 h-8 mb-2 ${
+                          achievement.earned ? 'text-primary' : 'text-muted-foreground'
+                        }`} />
+                        <span className="text-sm font-medium text-center">
+                          {achievement.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            </TabsContent>
+
+            {/* Favorites Tab */}
+            <TabsContent value="favorites">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="max-w-4xl mx-auto"
+              >
+                <div className="bg-card rounded-2xl p-6 shadow-card">
+                  <h3 className="text-xl font-display font-semibold mb-6">Restaurantes Favoritos</h3>
+                  
+                  {favoriteRestaurantsList.length > 0 ? (
+                    <div className="space-y-4">
+                      {favoriteRestaurantsList.map((restaurant) => (
+                        <Link
+                          key={restaurant.id}
+                          to={`/restaurante/${restaurant.id}`}
+                          className="flex items-center gap-4 p-4 rounded-xl bg-background hover:bg-muted transition-colors"
+                        >
+                          <img
+                            src={restaurant.image}
+                            alt={restaurant.name}
+                            className="w-20 h-20 rounded-lg object-cover"
+                          />
+                          <div className="flex-1">
+                            <h4 className="font-semibold">{restaurant.name}</h4>
+                            <p className="text-sm text-muted-foreground">{restaurant.cuisine} • {restaurant.zone}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Star className="w-4 h-4 fill-warning text-warning" />
+                              <span className="text-sm font-medium">{restaurant.rating}</span>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Heart className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+                      <p className="text-muted-foreground">
+                        Aún no tienes restaurantes favoritos
+                      </p>
+                      <Button asChild className="mt-4">
+                        <Link to="/restaurantes">Explorar restaurantes</Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </TabsContent>
+
+            {/* Preferences Tab */}
+            <TabsContent value="preferences">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="max-w-2xl mx-auto space-y-6"
+              >
+                {/* Notifications */}
+                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
+                  <div className="flex items-center gap-3">
+                    <Bell className="w-5 h-5 text-primary" />
+                    <h3 className="text-xl font-display font-semibold">Notificaciones</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="font-medium">Notificaciones por email</p>
+                        <p className="text-sm text-muted-foreground">Recibe confirmaciones y recordatorios</p>
+                      </div>
+                      <Switch
+                        checked={notifications.email}
+                        onCheckedChange={(checked) => setNotifications({...notifications, email: checked})}
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="font-medium">Notificaciones push</p>
+                        <p className="text-sm text-muted-foreground">Alertas en tiempo real en tu dispositivo</p>
+                      </div>
+                      <Switch
+                        checked={notifications.push}
+                        onCheckedChange={(checked) => setNotifications({...notifications, push: checked})}
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="font-medium">SMS</p>
+                        <p className="text-sm text-muted-foreground">Mensajes de texto para recordatorios importantes</p>
+                      </div>
+                      <Switch
+                        checked={notifications.sms}
+                        onCheckedChange={(checked) => setNotifications({...notifications, sms: checked})}
+                      />
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="font-medium">Marketing y ofertas</p>
+                        <p className="text-sm text-muted-foreground">Recibe promociones y descuentos exclusivos</p>
+                      </div>
+                      <Switch
+                        checked={notifications.marketing}
+                        onCheckedChange={(checked) => setNotifications({...notifications, marketing: checked})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dining Preferences */}
+                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    <h3 className="text-xl font-display font-semibold">Preferencias de Comida</h3>
+                  </div>
+                  
+                  <div className="grid gap-6">
+                    <div>
+                      <Label className="mb-2 block">Zona preferida</Label>
+                      <select
+                        value={userData.preferredZone}
+                        onChange={(e) => setUserData({...userData, preferredZone: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg border bg-background"
+                      >
+                        <option value="Centro">Centro</option>
+                        <option value="Montejo">Montejo</option>
+                        <option value="Norte">Norte</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="mb-2 block">Tipo de cocina favorita</Label>
+                      <select
+                        value={userData.preferredCuisine}
+                        onChange={(e) => setUserData({...userData, preferredCuisine: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg border bg-background"
+                      >
+                        <option value="Yucateca">Yucateca</option>
+                        <option value="Mariscos">Mariscos</option>
+                        <option value="Fusión">Fusión</option>
+                        <option value="Internacional">Internacional</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </TabsContent>
+
+            {/* Security Tab */}
+            <TabsContent value="security">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="max-w-2xl mx-auto space-y-6"
+              >
+                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
+                  <h3 className="text-xl font-display font-semibold">Cambiar Contraseña</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword">Contraseña actual</Label>
+                      <Input id="currentPassword" type="password" className="bg-background" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">Nueva contraseña</Label>
+                      <Input id="newPassword" type="password" className="bg-background" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                      <Input id="confirmPassword" type="password" className="bg-background" />
+                    </div>
+                    <Button className="w-full">Actualizar contraseña</Button>
+                  </div>
+                </div>
+
+                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
+                  <h3 className="text-xl font-display font-semibold text-destructive">Zona de Peligro</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5 border border-destructive/20">
+                      <div>
+                        <p className="font-medium text-destructive">Cerrar sesión</p>
+                        <p className="text-sm text-muted-foreground">Cierra tu sesión en este dispositivo</p>
+                      </div>
+                      <Button variant="destructive" size="sm" className="gap-2">
+                        <LogOut className="w-4 h-4" />
+                        Cerrar sesión
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5 border border-destructive/20">
+                      <div>
+                        <p className="font-medium text-destructive">Eliminar cuenta</p>
+                        <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer</p>
+                      </div>
+                      <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground">
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+};
+
+export default ClientProfilePage;
