@@ -13,6 +13,8 @@ import authRouter from './routes/auth.js';
 import offersRouter from './routes/offers.js';
 import reviewsRouter from './routes/reviews.js';
 import staffRouter from './routes/staff.js';
+import adminRouter from './routes/admin.js';
+import uploadRouter from './routes/upload.js';
 
 // Create Express app
 const app = express();
@@ -80,7 +82,8 @@ app.use('/api/offers', offersRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/staff', staffRouter);
 // app.use('/api/waitlist', waitlistRouter);
-// app.use('/api/admin', adminRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/upload', uploadRouter);
 // app.use('/api/payments', paymentsRouter);
 
 // ===========================================

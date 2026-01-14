@@ -300,3 +300,103 @@ export function staffRestaurantMiddleware(restaurantIdParam: string = 'restauran
         next();
     };
 }
+
+/**
+ * Middleware for admin routes
+ * Verifies JWT, checks admin role, and attaches restaurantId
+ */
+export async function authenticateAdmin(
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            res.status(401).json({
+                success: false,
+                error: 'No authorization token provided',
+            });
+            return;
+        }
+
+        const token = authHeader.split(' ')[1];
+        req.accessToken = token;
+
+        let userId: string | undefined;
+
+        try {
+            // Try to verify as our custom JWT first
+            const decoded = jwt.verify(token, env.jwtSecret) as any;
+            userId = decoded.userId || decoded.id;
+        } catch (jwtError) {
+            // If not our JWT, try Supabase
+            const { data: { user }, error: supabaseError } = await supabase.auth.getUser(token);
+            if (!supabaseError && user) {
+                userId = user.id;
+            }
+        }
+
+        if (!userId) {
+            res.status(401).json({
+                success: false,
+                error: 'Invalid or expired token',
+            });
+            return;
+        }
+
+        // Get user profile
+        const { data: userProfile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        if (profileError || !userProfile) {
+            res.status(401).json({
+                success: false,
+                error: 'User not found',
+            });
+            return;
+        }
+
+        // Check if user is admin
+        if (userProfile.role !== 'restaurant_admin' && userProfile.role !== 'super_admin') {
+            res.status(403).json({
+                success: false,
+                error: 'Admin access required',
+            });
+            return;
+        }
+
+        // Get the restaurant owned by this admin
+        const { data: restaurant } = await supabase
+            .from('restaurants')
+            .select('id')
+            .eq('owner_id', userId)
+            .single();
+
+        // Attach user and restaurantId to request
+        (req as any).user = {
+            ...userProfile,
+            restaurantId: restaurant?.id
+        };
+
+        if (!restaurant?.id && userProfile.role !== 'super_admin') {
+            res.status(403).json({
+                success: false,
+                error: 'No restaurant associated with this account',
+            });
+            return;
+        }
+
+        next();
+    } catch (error) {
+        console.error('Admin auth error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Authentication error',
+        });
+    }
+}
