@@ -1,305 +1,248 @@
-# 🍽️ Mesa Feliz
+# 🍽️ Sittara - Sistema de Gestión de Reservas para Restaurantes
 
-> **Sistema de reservación y gestión de mesas para restaurantes de alta demanda en Mérida, Yucatán.**
+> Plataforma moderna y completa para la gestión de reservas, mesas, menús y reseñas de restaurantes.
 
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Version](https://img.shields.io/badge/version-2.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Docker](https://img.shields.io/badge/docker-ready-brightgreen)
 
----
+## 🚀 Características
 
-## 📋 Descripción
+### Para Clientes
+- 🗓️ **Reservas en línea** con selección visual de mesas
+- 📱 **Códigos QR** para check-in rápido
+- ⭐ **Sistema de reseñas** con calificaciones por categoría
+- 💰 **Ofertas y promociones** exclusivas
+- ❤️ **Favoritos** para guardar restaurantes preferidos
+- 🔔 **Notificaciones** en tiempo real
 
-**Mesa Feliz** es una plataforma web moderna que conecta a comensales con los mejores restaurantes de Mérida, Yucatán. El sistema permite a los clientes descubrir restaurantes, seleccionar mesas visualmente en un mapa interactivo y realizar reservaciones en segundos. Para los restaurantes, ofrece un panel de administración completo para gestionar reservas, mesas, ofertas y analizar el rendimiento del negocio.
+### Para Restaurantes
+- 🏢 **Panel de administración** completo
+- 📊 **Dashboard** con métricas y estadísticas
+- 🪑 **Mapa visual de mesas** arrastra y suelta
+- 📋 **Gestión de menú** con categorías
+- 💵 **Control de anticipos** y depósitos
+- 👥 **Gestión de personal** con permisos
+- 📈 **Reportes** de ocupación y ventas
 
-### 🎯 Problema que resuelve
+### Para Staff
+- ✅ **Check-in** de reservas con QR
+- 📱 **App móvil** para tablets
+- 🔄 **Actualización de estado** de mesas
+- 📋 **Lista de espera** en tiempo real
 
-- Restaurantes con alta demanda que necesitan gestionar reservaciones eficientemente
-- Clientes que desean elegir su mesa preferida antes de llegar
-- Reducción de no-shows mediante anticipos en horarios pico
-- Optimización de la ocupación del restaurante en tiempo real
-
----
-
-## ✨ Características Principales
-
-### 👤 Para Clientes
-
-| Característica | Descripción |
-|----------------|-------------|
-| 🔍 **Descubrimiento** | Busca restaurantes por zona, tipo de cocina, calificación y disponibilidad |
-| 🗓️ **Reservación rápida** | Proceso de 3 pasos: fecha → hora → mesa |
-| 🪑 **Selección visual** | Mapa interactivo del restaurante para elegir tu mesa favorita |
-| 💳 **Pagos seguros** | Anticipos requeridos en horarios de alta demanda |
-| ⭐ **Calificaciones** | Sistema de reseñas con aspectos específicos y fotos |
-| 🎁 **Ofertas** | Promociones exclusivas de los restaurantes |
-| 👤 **Perfil personal** | Historial de reservas, favoritos y preferencias |
-| 🔐 **Autenticación** | Registro e inicio de sesión seguro |
-
-### 🏪 Para Restaurantes
-
-| Característica | Descripción |
-|----------------|-------------|
-| 📊 **Dashboard** | Métricas en tiempo real: reservas, ocupación, ingresos |
-| 🗺️ **Mapa operativo** | Vista en vivo del estado de todas las mesas |
-| 📝 **Gestión de reservas** | Aceptar, rechazar, confirmar llegadas |
-| 📱 **Escaneo QR** | Validación rápida de reservas con código QR |
-| ⏳ **Lista de espera** | Gestión de walk-ins con prioridades |
-| 🍽️ **Menú digital** | CRUD completo de platillos y categorías |
-| 🎯 **Ofertas** | Crear y gestionar promociones |
-| 📈 **Reportes** | Estadísticas de ocupación, no-shows y revenue |
-| 🤖 **Sugerencias IA** | Recomendaciones inteligentes para optimizar operación |
-| ⚙️ **Configuración** | Horarios, anticipos, notificaciones y usuarios |
-
----
-
-## 🎨 Diseño y UX
-
-### Paleta de Colores
-
-| Color | Hex | Uso |
-|-------|-----|-----|
-| 🟢 **Verde Jade** | `#1F7A6B` | Color primario, botones principales |
-| 🟠 **Terracota** | `#C85C3A` | Color secundario, acentos |
-| 🏖️ **Arena Claro** | `#F5F1EB` | Fondo principal |
-| ⬛ **Gris Oscuro** | `#2E2E2E` | Texto principal |
-
-### Estados de Mesa
-
-| Estado | Color | Descripción |
-|--------|-------|-------------|
-| 🟢 Disponible | Verde | Mesa libre para reservar |
-| 🔴 Ocupada | Rojo | Mesa con clientes |
-| 🟡 Pendiente | Amarillo | Esperando confirmación |
-| 🟣 Reservada | Jade | Mesa con reserva confirmada |
-
-### Principios de Diseño
-
-- ✅ Flujo lineal e intuitivo
-- ✅ Máximo 3 clics para completar reserva
-- ✅ Mensajes claros y confirmaciones visibles
-- ✅ Botones grandes con estados visuales
-- ✅ Tipografía legible (Inter + Playfair Display)
-- ✅ Animaciones suaves con Framer Motion
-- ✅ Totalmente responsivo
-
----
-
-## 🛠️ Tech Stack
+## 🛠️ Stack Tecnológico
 
 ### Frontend
-- **React 18** - Biblioteca de UI
-- **TypeScript** - Tipado estático
-- **Vite** - Build tool ultrarrápido
-- **React Router DOM** - Navegación SPA
+- **React 18** + **TypeScript**
+- **Vite** (build tool)
+- **TailwindCSS** + **Shadcn UI**
+- **React Query** (gestión de estado)
+- **React Router DOM** (routing)
+- **Framer Motion** (animaciones)
 
-### Estilos
-- **Tailwind CSS** - Utility-first CSS
-- **Shadcn UI** - Componentes accesibles
-- **Framer Motion** - Animaciones fluidas
-- **Lucide React** - Iconografía moderna
+### Backend
+- **Node.js** + **Express**
+- **TypeScript**
+- **Supabase** (PostgreSQL)
+- **JWT** (autenticación)
+- **bcrypt** (encriptación)
 
-### Estado y Datos
-- **React Query** - Cache y sincronización
-- **Context API** - Estado global (autenticación)
-- **LocalStorage** - Persistencia de sesión
+### DevOps
+- **Docker** + **Docker Compose**
+- **Nginx** (servidor web)
+- **GitHub Actions** (CI/CD - próximamente)
 
----
+## 📋 Requisitos Previos
+
+- **Node.js** v20 o superior
+- **npm** v9 o superior
+- **Docker** y **Docker Compose** (opcional)
+- Cuenta de **Supabase**
+
+## ⚡ Instalación Rápida
+
+### Opción 1: Con Docker (Recomendado)
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/TU-ORGANIZACION/sittara.git
+cd sittara
+
+# 2. Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus credenciales de Supabase
+
+# 3. Levantar servicios
+docker-compose up -d
+
+# 4. Acceder a la aplicación
+# Frontend: http://localhost:8080
+# Backend: http://localhost:3001
+```
+
+### Opción 2: Instalación Manual
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/TU-ORGANIZACION/sittara.git
+cd sittara
+
+# 2. Instalar dependencias del frontend
+npm install
+
+# 3. Instalar dependencias del backend
+cd backend
+npm install
+
+# 4. Configurar variables de entorno
+cp .env.example .env
+# Editar con tus credenciales
+
+# 5. Ejecutar base de datos
+# Ir a Supabase SQL Editor y ejecutar: backend/src/scripts/schema.sql
+
+# 6. Iniciar backend
+npm start
+
+# 7. En otra terminal, iniciar frontend
+cd ..
+npm run dev
+```
+
+## 🗃️ Configuración de Base de Datos
+
+1. Crear proyecto en [Supabase](https://supabase.com)
+2. Ir a **SQL Editor**
+3. Ejecutar el script: `backend/src/scripts/schema.sql`
+4. Copiar tus credenciales al archivo `.env`
 
 ## 📁 Estructura del Proyecto
 
 ```
-mesa-feliz/
-├── src/
-│   ├── components/          # Componentes reutilizables
-│   │   ├── admin/           # Componentes del panel admin
-│   │   ├── ui/              # Shadcn UI components
-│   │   ├── Header.tsx
-│   │   ├── Footer.tsx
-│   │   ├── TableMap.tsx
-│   │   └── ...
-│   │
-│   ├── pages/               # Páginas de la aplicación
-│   │   ├── admin/           # Páginas del panel admin
-│   │   │   ├── RestaurantDashboard.tsx
-│   │   │   ├── ReservationsManagementPage.tsx
-│   │   │   ├── TableMapOperativePage.tsx
-│   │   │   └── ...
-│   │   ├── Index.tsx
-│   │   ├── RestaurantsPage.tsx
-│   │   ├── ReservationPage.tsx
-│   │   └── ...
-│   │
-│   ├── contexts/            # Contextos de React
-│   │   └── AuthContext.tsx
-│   │
-│   ├── data/                # Datos mock
-│   │   └── mockData.ts
-│   │
-│   ├── types/               # Definiciones TypeScript
-│   │   └── restaurant.ts
-│   │
-│   ├── hooks/               # Custom hooks
-│   ├── lib/                 # Utilidades
-│   ├── App.tsx              # Rutas principales
-│   └── index.css            # Estilos globales
+sittara/
+├── backend/                # API Backend
+│   ├── src/
+│   │   ├── routes/        # Endpoints API
+│   │   ├── middleware/    # Auth, CORS, etc.
+│   │   ├── scripts/       # Schema SQL
+│   │   └── index.ts       # Entry point
+│   ├── Dockerfile
+│   └── package.json
 │
-├── public/                  # Assets estáticos
-├── tailwind.config.ts       # Configuración Tailwind
-├── vite.config.ts           # Configuración Vite
-└── package.json
+├── src/                   # Frontend React
+│   ├── components/        # Componentes reusables
+│   ├── pages/            # Páginas/vistas
+│   ├── contexts/         # Context API
+│   ├── hooks/            # Custom hooks
+│   ├── services/         # API calls
+│   └── types/            # TypeScript types
+│
+├── public/               # Assets estáticos
+├── docker-compose.yml    # Orquestación Docker
+├── nginx.conf           # Configuración Nginx
+└── README.md
 ```
 
----
+## 🔐 Variables de Entorno
 
-## 🚀 Instalación y Uso
+```env
+# Supabase
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_KEY=tu-clave-publica
 
-### Prerrequisitos
+# JWT
+JWT_SECRET=tu-secreto-jwt-seguro
 
-- Node.js 18+
-- npm o yarn
+# CORS
+CORS_ORIGIN=http://localhost:8080
 
-### Instalación
+# Ports
+BACKEND_PORT=3001
+FRONTEND_PORT=8080
+```
+
+## 🎯 Comandos Disponibles
+
+### Frontend
+```bash
+npm run dev          # Desarrollo
+npm run build        # Build producción
+npm run preview      # Preview build
+npm run lint         # Linter
+```
+
+### Backend
+```bash
+npm start            # Desarrollo
+npm run build        # Compilar TypeScript
+npm run serve        # Producción
+```
+
+### Docker
+```bash
+docker-compose up -d              # Levantar servicios
+docker-compose down               # Detener servicios
+docker-compose logs -f            # Ver logs
+docker-compose up -d --build      # Rebuild y levantar
+```
+
+## 🧪 Testing (Próximamente)
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/canulcua123-source/restaurant.git
-
-# Entrar al directorio
-cd restaurant
-
-# Instalar dependencias
-npm install
-
-# Iniciar servidor de desarrollo
-npm run dev
+npm run test         # Unit tests
+npm run test:e2e     # End-to-end tests
+npm run coverage     # Code coverage
 ```
 
-### Scripts Disponibles
+## 📸 Screenshots
 
-| Comando | Descripción |
-|---------|-------------|
-| `npm run dev` | Inicia el servidor de desarrollo |
-| `npm run build` | Genera build de producción |
-| `npm run preview` | Preview del build de producción |
-| `npm run lint` | Ejecuta ESLint |
+### Vista Cliente
+![Home](docs/screenshots/home.png)
+![Restaurante](docs/screenshots/restaurant-profile.png)
+![Reserva](docs/screenshots/reservation.png)
 
----
+### Panel Admin
+![Dashboard](docs/screenshots/admin-dashboard.png)
+![Mesas](docs/screenshots/table-management.png)
 
-## 🗺️ Rutas de la Aplicación
-
-### Rutas del Cliente
-
-| Ruta | Página |
-|------|--------|
-| `/` | Inicio - Descubrimiento de restaurantes |
-| `/login` | Inicio de sesión / Registro |
-| `/restaurantes` | Listado de restaurantes |
-| `/ofertas` | Ofertas y promociones activas |
-| `/restaurante/:id` | Perfil del restaurante |
-| `/reservar/:id` | Proceso de reservación |
-| `/pago/:id` | Pago de anticipo |
-| `/mis-reservas` | Mis reservaciones |
-| `/perfil` | Perfil del usuario |
-| `/calificar/:id` | Calificar restaurante |
-
-### Rutas del Administrador
-
-| Ruta | Página |
-|------|--------|
-| `/admin/login` | Login del restaurante |
-| `/admin/dashboard` | Panel principal |
-| `/admin/reservas` | Gestión de reservas |
-| `/admin/mesas` | Mapa de mesas operativo |
-| `/admin/llegadas` | Registro de llegadas |
-| `/admin/espera` | Lista de espera |
-| `/admin/ofertas` | Gestión de ofertas |
-| `/admin/menu` | Menú digital |
-| `/admin/opiniones` | Opiniones y calificaciones |
-| `/admin/reportes` | Reportes y estadísticas |
-| `/admin/ia-sugerencias` | Sugerencias de IA |
-| `/admin/configuracion` | Configuración |
-
----
-
-## 🔐 Credenciales de Prueba
-
-### Cliente
-| Email | Contraseña |
-|-------|------------|
-| `juan@email.com` | `123456` |
-| `maria@email.com` | `123456` |
-
-### Restaurante
-| Email | Contraseña |
-|-------|------------|
-| `admin@restaurante.com` | `admin123` |
-
----
-
-## 📸 Capturas de Pantalla
-
-### Vista del Cliente
-
-**Página de Inicio**
-> Descubrimiento de restaurantes con búsqueda y filtros
-
-**Selección de Mesa**
-> Mapa visual interactivo para elegir tu mesa favorita
-
-**Proceso de Reservación**
-> Flujo intuitivo en 3 pasos
-
-### Panel de Administración
-
-**Dashboard**
-> Métricas en tiempo real y alertas
-
-**Mapa Operativo**
-> Estado de mesas en vivo
-
-**Gestión de Reservas**
-> Tabla filtrable con acciones rápidas
-
----
-
-## 🔮 Roadmap
-
-- [ ] Integración con backend real (Node.js + PostgreSQL)
-- [ ] Notificaciones push en tiempo real
-- [ ] App móvil con React Native
-- [ ] Integración con pasarelas de pago (Stripe/OpenPay)
-- [ ] Sistema de fidelización con puntos
-- [ ] IA predictiva para demanda
-- [ ] Integración con WhatsApp Business API
-
----
-
-## 🤝 Contribución
+## 🤝 Contribuir
 
 Las contribuciones son bienvenidas. Por favor:
 
 1. Fork el proyecto
-2. Crea una rama (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -m 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+2. Crea una rama (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add: amazing feature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
----
+## 📝 Roadmap
+
+- [x] Sistema de reservas con mapa visual
+- [x] Panel de administración completo
+- [x] Sistema de reseñas
+- [x] Gestión de personal
+- [x] Dockerización
+- [ ] Pagos con Stripe
+- [ ] Notificaciones push
+- [ ] App móvil (React Native)
+- [ ] Sistema de puntos de lealtad
+- [ ] Integración con WhatsApp
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más información.
+
+## 👥 Autores
+
+- **Tu Nombre** - *Desarrollo Full Stack* - [GitHub](https://github.com/tu-usuario)
+
+## 🙏 Agradecimientos
+
+- [Supabase](https://supabase.com) - Backend as a Service
+- [Shadcn UI](https://ui.shadcn.com) - Componentes UI
+- [Lucide](https://lucide.dev) - Iconos
 
 ---
 
-## 👨‍💻 Autor
-
-Desarrollado con ❤️ para la gastronomía yucateca
-
----
-
-<p align="center">
-  <strong>Mesa Feliz</strong> - Reserva tu mesa en los mejores restaurantes de Mérida 🇲🇽
-</p>
+**Hecho con ❤️ para la industria restaurantera**

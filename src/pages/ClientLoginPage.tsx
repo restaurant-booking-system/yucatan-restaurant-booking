@@ -36,9 +36,9 @@ const ClientLoginPage = () => {
         e.preventDefault();
         setIsLoading(true);
 
-        const success = await login(loginEmail, loginPassword);
+        const result = await login(loginEmail, loginPassword);
 
-        if (success) {
+        if (result.success) {
             toast({
                 title: '¡Bienvenido!',
                 description: 'Has iniciado sesión correctamente',
@@ -47,7 +47,7 @@ const ClientLoginPage = () => {
         } else {
             toast({
                 title: 'Error',
-                description: 'Email o contraseña incorrectos',
+                description: result.error || 'Email o contraseña incorrectos',
                 variant: 'destructive',
             });
         }
@@ -76,9 +76,9 @@ const ClientLoginPage = () => {
         }
 
         setIsLoading(true);
-        const success = await register(registerName, registerEmail, registerPhone, registerPassword);
+        const result = await register(registerName, registerEmail, registerPhone, registerPassword);
 
-        if (success) {
+        if (result.success) {
             toast({
                 title: '¡Cuenta creada!',
                 description: 'Tu cuenta ha sido creada exitosamente',
@@ -87,7 +87,7 @@ const ClientLoginPage = () => {
         } else {
             toast({
                 title: 'Error',
-                description: 'El email ya está registrado',
+                description: result.error || 'El email ya está registrado',
                 variant: 'destructive',
             });
         }

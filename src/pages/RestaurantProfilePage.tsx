@@ -1,18 +1,66 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Star, MapPin, Clock, Phone, ChevronLeft, Tag, Users, Heart } from 'lucide-react';
+import { Star, ChevronLeft, Heart, Users, Calendar, Clock, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { restaurants, menuItems, offers } from '@/data/mockData';
+import PhotoGallery from '@/components/restaurant/PhotoGallery';
+import RestaurantInfo from '@/components/restaurant/RestaurantInfo';
+import OffersSection from '@/components/restaurant/OffersSection';
+import ReviewsList from '@/components/restaurant/ReviewsList';
+import { useRestaurant, useMenu, useRestaurantOffers } from '@/hooks/useData';
 
 const RestaurantProfilePage = () => {
   const { id } = useParams();
-  const restaurant = restaurants.find(r => r.id === id);
+  const navigate = useNavigate();
+  const { data: restaurant, isLoading } = useRestaurant(id);
+  const { data: menuItems = [] } = useMenu(id);
+  const { data: restaurantOffers = [] } = useRestaurantOffers(id);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+
+  // Fetch reviews (mock for now)
+  useEffect(() => {
+    // TODO: Replace with actual API call
+    setReviews([
+      {
+        id: '1',
+        userName: 'María García',
+        rating: 5,
+        foodRating: 5,
+        serviceRating: 4,
+        ambianceRating: 5,
+        comment: 'Excelente experiencia! La comida yucateca es auténtica y deliciosa. El servicio fue muy atento.',
+        tags: ['Romántico', 'Buena música'],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        userName: 'Carlos Méndez',
+        rating: 4,
+        foodRating: 4,
+        serviceRating: 5,
+        comment: 'Muy buen restaurante, la cochinita pibil es de las mejores que he probado.',
+        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+        response: 'Gracias por tu visita, Carlos! Nos alegra que hayas disfrutado.',
+        respondedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+      },
+    ]);
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="pt-28 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!restaurant) {
     return (
@@ -27,61 +75,86 @@ const RestaurantProfilePage = () => {
     );
   }
 
-  const restaurantOffers = offers.filter(o => o.restaurantId === restaurant.id);
   const menuCategories = [...new Set(menuItems.map(item => item.category))];
+
+  // Build photos array
+  const photos = restaurant.image
+    ? [restaurant.image, ...(restaurant.photos || [])]
+    : [];
+
+  // Transform offers for the component
+  const offersForSection = restaurantOffers.map(offer => ({
+    id: offer.id,
+    title: offer.title,
+    description: offer.description,
+    discount: offer.discount,
+    validDays: offer.validDays,
+    validHours: offer.validHours,
+    validUntil: offer.validUntil,
+  }));
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
-      {/* Hero Image */}
-      <section className="relative h-[50vh] min-h-[400px]">
-        <img
-          src={restaurant.image}
-          alt={restaurant.name}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-        
-        {/* Back Button */}
-        <Link
-          to="/restaurantes"
-          className="absolute top-24 left-4 md:left-8 z-10 p-2 rounded-full bg-card/80 backdrop-blur-sm hover:bg-card transition-colors"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </Link>
+      {/* Hero Section with Gallery */}
+      <section className="pt-20">
+        <div className="container mx-auto px-4 py-6">
+          {/* Back Button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            <ChevronLeft className="h-5 w-5" />
+            Volver
+          </button>
 
-        {/* Favorite Button */}
-        <button
-          onClick={() => setIsFavorite(!isFavorite)}
-          className="absolute top-24 right-4 md:right-8 z-10 p-2 rounded-full bg-card/80 backdrop-blur-sm hover:bg-card transition-colors"
-        >
-          <Heart className={`h-6 w-6 ${isFavorite ? 'fill-secondary text-secondary' : ''}`} />
-        </button>
+          {/* Photo Gallery */}
+          <PhotoGallery
+            photos={photos}
+            restaurantName={restaurant.name}
+          />
+        </div>
+      </section>
 
-        {/* Restaurant Info Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-          <div className="container mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
+      {/* Restaurant Header */}
+      <section className="py-6 border-b border-border">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div>
               {restaurant.hasOffers && (
-                <span className="badge-oferta mb-4 inline-block">{restaurant.offerText}</span>
+                <Badge className="bg-accent text-accent-foreground mb-2">
+                  🔥 Oferta Activa
+                </Badge>
               )}
-              <h1 className="font-display text-3xl md:text-5xl font-bold text-card mb-3">
+              <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">
                 {restaurant.name}
               </h1>
-              <div className="flex flex-wrap items-center gap-4 text-card/90">
-                <div className="flex items-center gap-1">
-                  <Star className="h-5 w-5 text-warning fill-warning" />
-                  <span className="font-semibold">{restaurant.rating}</span>
-                  <span className="text-card/70">({restaurant.reviewCount} reseñas)</span>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <div className="flex items-center gap-1.5 bg-yellow-100 px-3 py-1 rounded-full">
+                  <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                  <span className="font-semibold text-yellow-700">{restaurant.rating?.toFixed(1) || 'N/A'}</span>
+                  <span className="text-yellow-600">({restaurant.reviewCount || 0} reseñas)</span>
                 </div>
                 <Badge variant="secondary">{restaurant.cuisine}</Badge>
-                <Badge variant="outline" className="border-card/30 text-card">{restaurant.priceRange}</Badge>
+                <Badge variant="outline">{restaurant.priceRange}</Badge>
+                <Badge variant="outline">{restaurant.zone}</Badge>
+                {restaurant.isOpen !== undefined && (
+                  <Badge className={restaurant.isOpen ? 'bg-green-500' : 'bg-gray-500'}>
+                    <Clock className="h-3 w-3 mr-1" />
+                    {restaurant.isOpen ? 'Abierto' : 'Cerrado'}
+                  </Badge>
+                )}
               </div>
-            </motion.div>
+            </div>
+
+            {/* Favorite Button */}
+            <button
+              onClick={() => setIsFavorite(!isFavorite)}
+              className="p-3 rounded-full border border-border hover:bg-muted transition-colors"
+            >
+              <Heart className={`h-6 w-6 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+            </button>
           </div>
         </div>
       </section>
@@ -92,12 +165,14 @@ const RestaurantProfilePage = () => {
             {/* Main Content */}
             <div className="lg:col-span-2">
               <Tabs defaultValue="info" className="w-full">
-                <TabsList className="w-full justify-start mb-6 bg-muted p-1 rounded-xl">
+                <TabsList className="w-full justify-start mb-6 bg-muted p-1 rounded-xl overflow-x-auto">
                   <TabsTrigger value="info" className="rounded-lg">Información</TabsTrigger>
                   <TabsTrigger value="menu" className="rounded-lg">Menú</TabsTrigger>
-                  <TabsTrigger value="reviews" className="rounded-lg">Reseñas</TabsTrigger>
+                  <TabsTrigger value="offers" className="rounded-lg">Ofertas</TabsTrigger>
+                  <TabsTrigger value="reviews" className="rounded-lg">Opiniones</TabsTrigger>
                 </TabsList>
 
+                {/* Info Tab */}
                 <TabsContent value="info">
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -108,126 +183,112 @@ const RestaurantProfilePage = () => {
                     <div className="bg-card rounded-2xl p-6 shadow-card">
                       <h2 className="font-display text-xl font-semibold mb-4">Acerca del restaurante</h2>
                       <p className="text-muted-foreground leading-relaxed">
-                        {restaurant.description}
+                        {restaurant.description || 'Descubre una experiencia gastronómica única en el corazón de Mérida. Nuestro restaurante ofrece lo mejor de la cocina regional con un toque contemporáneo.'}
                       </p>
                     </div>
 
-                    {/* Details */}
-                    <div className="bg-card rounded-2xl p-6 shadow-card">
-                      <h2 className="font-display text-xl font-semibold mb-4">Detalles</h2>
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <p className="font-medium">Dirección</p>
-                            <p className="text-muted-foreground">{restaurant.address}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <Clock className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <p className="font-medium">Horario</p>
-                            <p className="text-muted-foreground">{restaurant.openTime} - {restaurant.closeTime}</p>
-                            {restaurant.isOpen ? (
-                              <span className="estado-abierto inline-flex items-center gap-1 mt-2">
-                                <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                                Abierto ahora
-                              </span>
-                            ) : (
-                              <span className="estado-cerrado inline-block mt-2">Cerrado</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <Phone className="h-5 w-5 text-primary mt-0.5" />
-                          <div>
-                            <p className="font-medium">Teléfono</p>
-                            <p className="text-muted-foreground">+52 999 123 4567</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Offers */}
-                    {restaurantOffers.length > 0 && (
-                      <div className="bg-accent rounded-2xl p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Tag className="h-5 w-5 text-secondary" />
-                          <h2 className="font-display text-xl font-semibold">Ofertas activas</h2>
-                        </div>
-                        <div className="space-y-3">
-                          {restaurantOffers.map((offer) => (
-                            <div key={offer.id} className="bg-card rounded-xl p-4">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-semibold">{offer.title}</p>
-                                  <p className="text-sm text-muted-foreground">{offer.description}</p>
-                                </div>
-                                <span className="badge-oferta">{offer.discount}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {/* Restaurant Info Component */}
+                    <RestaurantInfo
+                      restaurant={{
+                        address: restaurant.address,
+                        zone: restaurant.zone,
+                        phone: restaurant.phone,
+                        email: restaurant.email,
+                        website: restaurant.website,
+                        instagram: restaurant.instagram,
+                        facebook: restaurant.facebook,
+                        openingHours: restaurant.openingHours,
+                        features: restaurant.features || ['wifi', 'parking', 'accessible'],
+                        paymentMethods: restaurant.paymentMethods || ['Efectivo', 'Tarjeta', 'Transferencia'],
+                        cuisineType: restaurant.cuisine,
+                        priceRange: restaurant.priceRange,
+                      }}
+                    />
                   </motion.div>
                 </TabsContent>
 
+                {/* Menu Tab */}
                 <TabsContent value="menu">
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="space-y-6"
                   >
-                    {menuCategories.map((category) => (
-                      <div key={category} className="bg-card rounded-2xl p-6 shadow-card">
-                        <h2 className="font-display text-xl font-semibold mb-4">{category}</h2>
-                        <div className="space-y-4">
-                          {menuItems
-                            .filter(item => item.category === category)
-                            .map((item) => (
-                              <div key={item.id} className="flex justify-between items-start border-b border-border pb-4 last:border-0 last:pb-0">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium">{item.name}</p>
-                                    {item.isHighlighted && (
-                                      <Badge variant="secondary" className="text-xs">Destacado</Badge>
-                                    )}
+                    {menuCategories.length > 0 ? (
+                      menuCategories.map((category) => (
+                        <div key={category} className="bg-card rounded-2xl p-6 shadow-card">
+                          <h2 className="font-display text-xl font-semibold mb-4">{category}</h2>
+                          <div className="space-y-4">
+                            {menuItems
+                              .filter(item => item.category === category)
+                              .map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex gap-4 border-b border-border pb-4 last:border-0 last:pb-0"
+                                >
+                                  {item.image && (
+                                    <img
+                                      src={item.image}
+                                      alt={item.name}
+                                      className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                                    />
+                                  )}
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium">{item.name}</p>
+                                      {item.isHighlighted && (
+                                        <Badge variant="secondary" className="text-xs">⭐ Destacado</Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
                                   </div>
-                                  <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                                  <p className="font-semibold text-primary text-lg">${item.price}</p>
                                 </div>
-                                <p className="font-semibold text-primary ml-4">${item.price}</p>
-                              </div>
-                            ))}
+                              ))}
+                          </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="bg-card rounded-2xl p-8 shadow-card text-center">
+                        <p className="text-muted-foreground">El menú aún no está disponible</p>
+                        <p className="text-sm text-muted-foreground mt-2">Pronto agregaremos los platillos</p>
                       </div>
-                    ))}
+                    )}
                   </motion.div>
                 </TabsContent>
 
+                {/* Offers Tab */}
+                <TabsContent value="offers">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    {offersForSection.length > 0 ? (
+                      <OffersSection
+                        offers={offersForSection}
+                        onReserve={() => navigate(`/reservar/${restaurant.id}`)}
+                      />
+                    ) : (
+                      <div className="bg-card rounded-2xl p-8 shadow-card text-center">
+                        <p className="text-muted-foreground">No hay ofertas activas en este momento</p>
+                        <p className="text-sm text-muted-foreground mt-2">¡Vuelve pronto para ver promociones!</p>
+                      </div>
+                    )}
+                  </motion.div>
+                </TabsContent>
+
+                {/* Reviews Tab */}
                 <TabsContent value="reviews">
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="bg-card rounded-2xl p-6 shadow-card"
                   >
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="text-center">
-                        <p className="text-4xl font-bold text-primary">{restaurant.rating}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              className={`h-4 w-4 ${star <= Math.round(restaurant.rating) ? 'text-warning fill-warning' : 'text-muted'}`}
-                            />
-                          ))}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">{restaurant.reviewCount} reseñas</p>
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground text-center py-8">
-                      Las reseñas estarán disponibles próximamente
-                    </p>
+                    <ReviewsList
+                      reviews={reviews}
+                      showStats={true}
+                      averageRating={restaurant.rating}
+                      totalReviews={restaurant.reviewCount}
+                    />
                   </motion.div>
                 </TabsContent>
               </Tabs>
@@ -241,25 +302,37 @@ const RestaurantProfilePage = () => {
                 transition={{ delay: 0.2 }}
                 className="sticky top-28"
               >
-                <div className="bg-card rounded-2xl p-6 shadow-elevated">
-                  <h2 className="font-display text-xl font-semibold mb-4">Reservar mesa</h2>
-                  <p className="text-muted-foreground mb-6">
-                    Selecciona la fecha, hora y tu mesa favorita visualmente.
+                <div className="bg-card rounded-2xl p-6 shadow-elevated border border-border">
+                  <h2 className="font-display text-xl font-semibold mb-2">Reservar mesa</h2>
+                  <p className="text-muted-foreground text-sm mb-6">
+                    Elige tu mesa visualmente en nuestro mapa interactivo
                   </p>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-4 bg-muted rounded-xl">
-                      <Users className="h-5 w-5 text-primary" />
+                  <div className="space-y-3 mb-6">
+                    <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Users className="h-5 w-5 text-primary" />
+                      </div>
                       <div>
-                        <p className="font-medium">Hasta 10 personas</p>
-                        <p className="text-sm text-muted-foreground">Mesas disponibles de 2 a 10</p>
+                        <p className="font-medium text-sm">Hasta 10 personas</p>
+                        <p className="text-xs text-muted-foreground">Mesas de 2 a 10</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Calendar className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">Reserva anticipada</p>
+                        <p className="text-xs text-muted-foreground">Hasta 30 días</p>
                       </div>
                     </div>
                   </div>
 
                   <Link to={`/reservar/${restaurant.id}`}>
-                    <Button className="w-full mt-6 btn-hero h-14 text-lg">
+                    <Button className="w-full h-14 text-lg gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
                       Reservar ahora
+                      <ArrowRight className="h-5 w-5" />
                     </Button>
                   </Link>
 
@@ -267,6 +340,15 @@ const RestaurantProfilePage = () => {
                     Algunos horarios pueden requerir anticipo
                   </p>
                 </div>
+
+                {/* Quick Offers */}
+                {restaurantOffers.length > 0 && (
+                  <div className="mt-4 p-4 bg-accent/50 rounded-xl border border-accent">
+                    <p className="text-sm font-medium mb-2">🔥 Oferta activa</p>
+                    <p className="text-sm text-foreground">{restaurantOffers[0].title}</p>
+                    <p className="text-xs text-muted-foreground">{restaurantOffers[0].discount}</p>
+                  </div>
+                )}
               </motion.div>
             </div>
           </div>

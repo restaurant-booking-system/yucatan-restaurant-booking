@@ -39,7 +39,7 @@ const Header = () => {
               <span className="text-primary-foreground font-display text-xl">M</span>
             </div>
             <span className={`font-display text-xl font-semibold ${isHome ? 'text-card' : 'text-foreground'}`}>
-              MesaYucatán
+              Sittara
             </span>
           </Link>
 
@@ -81,7 +81,9 @@ const Header = () => {
                     <div className="w-6 h-6 rounded-full bg-primary-foreground/20 flex items-center justify-center">
                       <User className="h-4 w-4" />
                     </div>
-                    <span className="max-w-24 truncate">{user.name.split(' ')[0]}</span>
+                    <span className="max-w-24 truncate">
+                      {user?.name ? user.name.split(' ')[0] : 'Usuario'}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">

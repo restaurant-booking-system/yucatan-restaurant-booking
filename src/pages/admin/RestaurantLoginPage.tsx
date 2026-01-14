@@ -10,9 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
+import { toast } from 'sonner';
 
 const RestaurantLoginPage = () => {
     const navigate = useNavigate();
+    const { login } = useRestaurantAuth();
+
     const [showPassword, setShowPassword] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -23,18 +27,29 @@ const RestaurantLoginPage = () => {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (!email || !password) {
+            setError('Por favor ingresa tu email y contraseña');
+            return;
+        }
+
         setIsLoading(true);
 
-        // Simulate login
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // For demo, accept any credentials
-        if (email && password) {
-            navigate('/admin/dashboard');
-        } else {
-            setError('Por favor ingresa tu email y contraseña');
+        try {
+            const success = await login(email, password);
+            if (success) {
+                toast.success('¡Bienvenido de vuelta!');
+                navigate('/admin/dashboard');
+            } else {
+                setError('Credenciales inválidas. Por favor intenta de nuevo.');
+                toast.error('Error al iniciar sesión');
+            }
+        } catch (err: any) {
+            setError(err.message || 'Ocurrió un error inesperado');
+            toast.error('Error de conexión');
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     return (

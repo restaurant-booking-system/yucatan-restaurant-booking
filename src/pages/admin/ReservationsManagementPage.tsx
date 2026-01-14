@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-    Search, Filter, Calendar, Clock, Users, MapPin,
+    Search, Filter, Calendar, Clock, Users,
     Check, X, MoreHorizontal, Phone, Mail, MessageSquare,
-    ChevronDown, Download, Eye, Edit
+    Eye, Edit, Download, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -34,93 +33,50 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { cn } from '@/lib/utils';
-
-// Mock reservations data
-const mockReservations = [
-    {
-        id: 'RES-001',
-        customerName: 'María García',
-        customerPhone: '+52 999 123 4567',
-        customerEmail: 'maria@email.com',
-        date: '2024-02-15',
-        time: '13:00',
-        guests: 2,
-        mesa: 3,
-        status: 'pending',
-        specialRequest: 'Mesa cerca de la ventana',
-        occasion: 'Cumpleaños',
-        depositPaid: false,
-        createdAt: '2024-02-14T10:30:00',
-    },
-    {
-        id: 'RES-002',
-        customerName: 'Carlos López',
-        customerPhone: '+52 999 234 5678',
-        customerEmail: 'carlos@email.com',
-        date: '2024-02-15',
-        time: '14:00',
-        guests: 4,
-        mesa: 5,
-        status: 'confirmed',
-        specialRequest: '',
-        occasion: '',
-        depositPaid: true,
-        depositAmount: 200,
-        createdAt: '2024-02-13T15:00:00',
-    },
-    {
-        id: 'RES-003',
-        customerName: 'Ana Martínez',
-        customerPhone: '+52 999 345 6789',
-        customerEmail: 'ana@email.com',
-        date: '2024-02-15',
-        time: '19:00',
-        guests: 6,
-        mesa: 7,
-        status: 'confirmed',
-        specialRequest: 'Cena romántica, decoración especial',
-        occasion: 'Aniversario',
-        depositPaid: true,
-        depositAmount: 300,
-        createdAt: '2024-02-12T09:00:00',
-    },
-    {
-        id: 'RES-004',
-        customerName: 'Roberto Sánchez',
-        customerPhone: '+52 999 456 7890',
-        customerEmail: 'roberto@email.com',
-        date: '2024-02-15',
-        time: '20:00',
-        guests: 8,
-        mesa: 10,
-        status: 'pending',
-        specialRequest: 'Reunión de negocios',
-        occasion: 'Negocios',
-        depositPaid: false,
-        createdAt: '2024-02-14T14:00:00',
-    },
-    {
-        id: 'RES-005',
-        customerName: 'Laura Torres',
-        customerPhone: '+52 999 567 8901',
-        customerEmail: 'laura@email.com',
-        date: '2024-02-15',
-        time: '21:00',
-        guests: 2,
-        mesa: 1,
-        status: 'cancelled',
-        specialRequest: '',
-        occasion: '',
-        depositPaid: false,
-        createdAt: '2024-02-10T08:00:00',
-    },
-];
+import { useRestaurantReservations, useUpdateReservationStatus } from '@/hooks/useData';
+import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
+import { Reservation, ReservationStatus } from '@/types';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const ReservationsManagementPage = () => {
+    const { restaurant } = useRestaurantAuth();
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [selectedReservation, setSelectedReservation] = useState<typeof mockReservations[0] | null>(null);
+    const [dateFilter, setDateFilter] = useState('today');
+    const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+    // Map date filter to actual date string
+    const getDateString = () => {
+        const today = new Date();
+        if (dateFilter === 'today') return format(today, 'yyyy-MM-dd');
+        if (dateFilter === 'tomorrow') {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            return format(tomorrow, 'yyyy-MM-dd');
+        }
+        return undefined; // Fetch all for other filters for now
+    };
+
+    const {
+        data: reservations = [],
+        isLoading,
+        error
+    } = useRestaurantReservations(restaurant?.id, {
+        status: statusFilter !== 'all' ? statusFilter as any : undefined,
+        date: getDateString()
+    });
+
+    const updateStatusMutation = useUpdateReservationStatus();
+
+    const handleStatusUpdate = async (reservationId: string, status: ReservationStatus) => {
+        try {
+            await updateStatusMutation.mutateAsync({ reservationId, status });
+        } catch (err) {
+            console.error('Error updating status:', err);
+        }
+    };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -132,20 +88,34 @@ const ReservationsManagementPage = () => {
                 return <Badge className="bg-destructive text-destructive-foreground">Cancelada</Badge>;
             case 'completed':
                 return <Badge className="bg-primary text-primary-foreground">Completada</Badge>;
+            case 'arrived':
+                return <Badge className="bg-info text-info-foreground">Llegó</Badge>;
+            case 'no_show':
+                return <Badge className="bg-muted text-muted-foreground">No asistió</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
     };
 
-    const filteredReservations = mockReservations.filter(res => {
+    const filteredReservations = reservations.filter(res => {
         const matchesSearch = res.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             res.id.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || res.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesSearch;
     });
 
-    const pendingCount = mockReservations.filter(r => r.status === 'pending').length;
-    const confirmedCount = mockReservations.filter(r => r.status === 'confirmed').length;
+    const pendingCount = reservations.filter(r => r.status === 'pending').length;
+    const confirmedCount = reservations.filter(r => r.status === 'confirmed').length;
+
+    if (isLoading) {
+        return (
+            <AdminLayout>
+                <div className="flex items-center justify-center h-64">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <span className="ml-2">Cargando reservaciones...</span>
+                </div>
+            </AdminLayout>
+        );
+    }
 
     return (
         <AdminLayout>
@@ -163,7 +133,7 @@ const ReservationsManagementPage = () => {
                             <Download className="w-4 h-4" />
                             Exportar
                         </Button>
-                        <Select defaultValue="today">
+                        <Select value={dateFilter} onValueChange={setDateFilter}>
                             <SelectTrigger className="w-40">
                                 <Calendar className="w-4 h-4 mr-2" />
                                 <SelectValue placeholder="Fecha" />
@@ -173,6 +143,7 @@ const ReservationsManagementPage = () => {
                                 <SelectItem value="tomorrow">Mañana</SelectItem>
                                 <SelectItem value="week">Esta semana</SelectItem>
                                 <SelectItem value="month">Este mes</SelectItem>
+                                <SelectItem value="all">Todas</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -199,6 +170,7 @@ const ReservationsManagementPage = () => {
                             <SelectItem value="pending">Pendientes</SelectItem>
                             <SelectItem value="confirmed">Confirmadas</SelectItem>
                             <SelectItem value="cancelled">Canceladas</SelectItem>
+                            <SelectItem value="completed">Completadas</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -211,7 +183,6 @@ const ReservationsManagementPage = () => {
                     </TabsList>
 
                     <TabsContent value="list" className="space-y-4">
-                        {/* Reservations List */}
                         <div className="bg-card rounded-xl shadow-card overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full">
@@ -237,27 +208,29 @@ const ReservationsManagementPage = () => {
                                                 className="hover:bg-muted/30 transition-colors"
                                             >
                                                 <td className="px-4 py-4">
-                                                    <span className="font-mono text-sm font-medium">{reservation.id}</span>
+                                                    <span className="font-mono text-xs font-medium uppercase">{reservation.id.split('-')[0]}</span>
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div>
-                                                        <p className="font-medium">{reservation.customerName}</p>
-                                                        <p className="text-sm text-muted-foreground">{reservation.customerPhone}</p>
+                                                        <p className="font-medium text-sm">{reservation.customerName}</p>
+                                                        <p className="text-xs text-muted-foreground">{reservation.customerPhone || 'Sin teléfono'}</p>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock className="w-4 h-4 text-muted-foreground" />
-                                                        <span>{reservation.time}</span>
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Clock className="w-3 h-3 text-muted-foreground" />
+                                                        <span>{reservation.time.substring(0, 5)}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <Badge variant="outline">Mesa {reservation.mesa}</Badge>
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {reservation.table?.number ? `Mesa ${reservation.table.number}` : 'Asignando...'}
+                                                    </Badge>
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <Users className="w-4 h-4 text-muted-foreground" />
-                                                        <span>{reservation.guests}</span>
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Users className="w-3 h-3 text-muted-foreground" />
+                                                        <span>{reservation.guestCount}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4">
@@ -265,19 +238,29 @@ const ReservationsManagementPage = () => {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     {reservation.depositPaid ? (
-                                                        <span className="text-success font-medium">${reservation.depositAmount}</span>
+                                                        <span className="text-success font-medium text-sm">${reservation.depositAmount}</span>
                                                     ) : (
-                                                        <span className="text-muted-foreground">-</span>
+                                                        <span className="text-muted-foreground text-sm">-</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex items-center justify-end gap-1">
                                                         {reservation.status === 'pending' && (
                                                             <>
-                                                                <Button size="sm" variant="ghost" className="text-success h-8 w-8 p-0">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="text-success h-8 w-8 p-0"
+                                                                    onClick={() => handleStatusUpdate(reservation.id, 'confirmed')}
+                                                                >
                                                                     <Check className="w-4 h-4" />
                                                                 </Button>
-                                                                <Button size="sm" variant="ghost" className="text-destructive h-8 w-8 p-0">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="text-destructive h-8 w-8 p-0"
+                                                                    onClick={() => handleStatusUpdate(reservation.id, 'cancelled')}
+                                                                >
                                                                     <X className="w-4 h-4" />
                                                                 </Button>
                                                             </>
@@ -299,21 +282,27 @@ const ReservationsManagementPage = () => {
                                                                     <Eye className="w-4 h-4" />
                                                                     Ver detalles
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem className="gap-2">
-                                                                    <Phone className="w-4 h-4" />
-                                                                    Llamar cliente
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem className="gap-2">
-                                                                    <MessageSquare className="w-4 h-4" />
-                                                                    Enviar mensaje
-                                                                </DropdownMenuItem>
+                                                                {reservation.customerPhone && (
+                                                                    <DropdownMenuItem className="gap-2">
+                                                                        <Phone className="w-4 h-4" />
+                                                                        Llamar cliente
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                                 <DropdownMenuSeparator />
-                                                                <DropdownMenuItem className="gap-2">
-                                                                    <Edit className="w-4 h-4" />
-                                                                    Editar
-                                                                </DropdownMenuItem>
+                                                                {reservation.status === 'confirmed' && (
+                                                                    <DropdownMenuItem
+                                                                        className="gap-2 text-primary"
+                                                                        onClick={() => handleStatusUpdate(reservation.id, 'arrived')}
+                                                                    >
+                                                                        <Check className="w-4 h-4" />
+                                                                        Marcar llegada
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                                 {reservation.status !== 'cancelled' && (
-                                                                    <DropdownMenuItem className="gap-2 text-destructive">
+                                                                    <DropdownMenuItem
+                                                                        className="gap-2 text-destructive"
+                                                                        onClick={() => handleStatusUpdate(reservation.id, 'cancelled')}
+                                                                    >
                                                                         <X className="w-4 h-4" />
                                                                         Cancelar reserva
                                                                     </DropdownMenuItem>
@@ -331,7 +320,7 @@ const ReservationsManagementPage = () => {
                             {filteredReservations.length === 0 && (
                                 <div className="text-center py-12">
                                     <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                                    <p className="text-muted-foreground">No se encontraron reservas</p>
+                                    <p className="text-muted-foreground text-sm">No se encontraron reservas</p>
                                 </div>
                             )}
                         </div>
@@ -340,40 +329,43 @@ const ReservationsManagementPage = () => {
                     <TabsContent value="timeline">
                         <div className="bg-card rounded-xl p-6 shadow-card">
                             <div className="space-y-4">
-                                {filteredReservations.map((reservation, index) => (
-                                    <div key={reservation.id} className="flex gap-4">
-                                        <div className="flex flex-col items-center">
-                                            <div className={cn(
-                                                'w-10 h-10 rounded-full flex items-center justify-center',
-                                                reservation.status === 'confirmed' ? 'bg-success/20' :
-                                                    reservation.status === 'pending' ? 'bg-warning/20' : 'bg-destructive/20'
-                                            )}>
-                                                <Clock className={cn(
-                                                    'w-5 h-5',
-                                                    reservation.status === 'confirmed' ? 'text-success' :
-                                                        reservation.status === 'pending' ? 'text-warning' : 'text-destructive'
-                                                )} />
-                                            </div>
-                                            {index < filteredReservations.length - 1 && (
-                                                <div className="w-0.5 h-full bg-muted my-2" />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 pb-4">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-semibold">{reservation.time} - {reservation.customerName}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Mesa {reservation.mesa} • {reservation.guests} personas
-                                                    </p>
-                                                    {reservation.occasion && (
-                                                        <Badge variant="outline" className="mt-2">{reservation.occasion}</Badge>
-                                                    )}
-                                                </div>
-                                                {getStatusBadge(reservation.status)}
-                                            </div>
-                                        </div>
+                                {filteredReservations.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <p className="text-muted-foreground text-sm">No hay reservaciones para mostrar en la línea de tiempo</p>
                                     </div>
-                                ))}
+                                ) : (
+                                    filteredReservations.map((reservation, index) => (
+                                        <div key={reservation.id} className="flex gap-4">
+                                            <div className="flex flex-col items-center">
+                                                <div className={cn(
+                                                    'w-10 h-10 rounded-full flex items-center justify-center',
+                                                    reservation.status === 'confirmed' ? 'bg-success/20 text-success' :
+                                                        reservation.status === 'pending' ? 'bg-warning/20 text-warning' :
+                                                            reservation.status === 'completed' ? 'bg-primary/20 text-primary' : 'bg-destructive/20 text-destructive'
+                                                )}>
+                                                    <Clock className="w-5 h-5" />
+                                                </div>
+                                                {index < filteredReservations.length - 1 && (
+                                                    <div className="w-0.5 h-full bg-muted my-2" />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 pb-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-semibold">{reservation.time.substring(0, 5)} - {reservation.customerName}</p>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {reservation.table?.number ? `Mesa ${reservation.table.number}` : 'Sin mesa'} • {reservation.guestCount} personas
+                                                        </p>
+                                                        {reservation.occasion && (
+                                                            <Badge variant="outline" className="mt-2 text-xs">{reservation.occasion}</Badge>
+                                                        )}
+                                                    </div>
+                                                    {getStatusBadge(reservation.status)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </TabsContent>
@@ -386,63 +378,73 @@ const ReservationsManagementPage = () => {
                             <>
                                 <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2">
-                                        Reserva {selectedReservation.id}
+                                        Reserva {selectedReservation.id.split('-')[0].toUpperCase()}
                                         {getStatusBadge(selectedReservation.status)}
                                     </DialogTitle>
                                     <DialogDescription>
-                                        Creada el {new Date(selectedReservation.createdAt).toLocaleDateString('es-MX')}
+                                        Creada el {selectedReservation.createdAt ? format(new Date(selectedReservation.createdAt), 'PPP', { locale: es }) : 'N/A'}
                                     </DialogDescription>
                                 </DialogHeader>
 
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Cliente</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Cliente</p>
                                             <p className="font-medium">{selectedReservation.customerName}</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Teléfono</p>
-                                            <p className="font-medium">{selectedReservation.customerPhone}</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Teléfono</p>
+                                            <p className="font-medium">{selectedReservation.customerPhone || 'N/A'}</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Fecha y Hora</p>
-                                            <p className="font-medium">{selectedReservation.date} • {selectedReservation.time}</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Fecha y Hora</p>
+                                            <p className="font-medium">{format(new Date(selectedReservation.date + 'T12:00:00'), 'PP', { locale: es })} • {selectedReservation.time.substring(0, 5)}</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-sm text-muted-foreground">Mesa / Personas</p>
-                                            <p className="font-medium">Mesa {selectedReservation.mesa} • {selectedReservation.guests} personas</p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">Mesa / Personas</p>
+                                            <p className="font-medium">
+                                                {selectedReservation.table?.number ? `Mesa ${selectedReservation.table.number}` : 'Sin mesa'} • {selectedReservation.guestCount} personas
+                                            </p>
                                         </div>
                                     </div>
 
                                     {selectedReservation.specialRequest && (
-                                        <div className="p-3 rounded-lg bg-muted">
-                                            <p className="text-sm text-muted-foreground mb-1">Solicitud especial</p>
-                                            <p className="text-sm">{selectedReservation.specialRequest}</p>
+                                        <div className="p-3 rounded-lg bg-muted/50 border">
+                                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Solicitud especial</p>
+                                            <p className="text-sm italic">"{selectedReservation.specialRequest}"</p>
                                         </div>
                                     )}
 
                                     {selectedReservation.depositPaid && (
                                         <div className="p-3 rounded-lg bg-success/10 border border-success/20">
-                                            <p className="text-sm text-success font-medium">
+                                            <p className="text-sm text-success font-medium flex items-center gap-2">
+                                                <Check className="w-4 h-4" />
                                                 Anticipo pagado: ${selectedReservation.depositAmount} MXN
                                             </p>
                                         </div>
                                     )}
                                 </div>
 
-                                <DialogFooter className="flex-col sm:flex-row gap-2">
-                                    <Button variant="outline" className="gap-2">
-                                        <Phone className="w-4 h-4" />
-                                        Llamar
+                                <DialogFooter className="flex-col sm:flex-row gap-2 mt-6">
+                                    <Button variant="outline" className="gap-2" onClick={() => setIsDetailOpen(false)}>
+                                        Cerrar
                                     </Button>
-                                    <Button variant="outline" className="gap-2">
-                                        <MessageSquare className="w-4 h-4" />
-                                        WhatsApp
-                                    </Button>
+                                    {selectedReservation.customerPhone && (
+                                        <Button variant="outline" className="gap-2">
+                                            <Phone className="w-4 h-4" />
+                                            Llamar
+                                        </Button>
+                                    )}
                                     {selectedReservation.status === 'pending' && (
-                                        <Button className="gap-2">
+                                        <Button
+                                            className="gap-2"
+                                            onClick={() => {
+                                                handleStatusUpdate(selectedReservation.id, 'confirmed');
+                                                setIsDetailOpen(false);
+                                            }}
+                                        >
                                             <Check className="w-4 h-4" />
-                                            Confirmar
+                                            Confirmar Reserva
                                         </Button>
                                     )}
                                 </DialogFooter>

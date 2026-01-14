@@ -18,6 +18,9 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
+import { toast } from 'sonner';
+import { useEffect } from 'react';
 
 interface AdminLayoutProps {
     children: ReactNode;
@@ -46,14 +49,41 @@ const mockNotifications = [
 const AdminLayout = ({ children }: AdminLayoutProps) => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { user, restaurant, logout } = useRestaurantAuth();
+
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
-    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return document.documentElement.classList.contains('dark');
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        if (isDarkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [isDarkMode]);
 
     const isActive = (path: string) => location.pathname === path;
 
     const handleLogout = () => {
+        logout();
+        toast.info('Sesión cerrada correctamente');
         navigate('/admin/login');
+    };
+
+    const handleHelp = () => {
+        toast('Centro de Ayuda', {
+            description: '¿Necesitas asistencia? Contáctanos en soporte@mesafeliz.com o visita nuestra guía rápida.',
+            action: {
+                label: 'Guía',
+                onClick: () => console.log('Help guide open'),
+            },
+        });
     };
 
     return (
@@ -237,7 +267,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                             </Button>
 
                             {/* Help */}
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" onClick={handleHelp}>
                                 <HelpCircle className="w-5 h-5" />
                             </Button>
 
@@ -270,29 +300,39 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                             {/* User Menu */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="gap-2">
-                                        <Avatar className="w-8 h-8">
-                                            <AvatarImage src="" />
-                                            <AvatarFallback className="bg-primary text-primary-foreground text-xs">JD</AvatarFallback>
+                                    <Button variant="ghost" className="gap-2 px-2 hover:bg-accent transition-colors">
+                                        <Avatar className="w-8 h-8 border">
+                                            <AvatarImage src={user?.avatar || ""} />
+                                            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                                                {user?.name?.substring(0, 2).toUpperCase() || "AD"}
+                                            </AvatarFallback>
                                         </Avatar>
-                                        <span className="hidden md:inline font-medium">Juan Díaz</span>
+                                        <div className="hidden md:flex flex-col items-start gap-0.5">
+                                            <span className="text-sm font-bold leading-none">{user?.name || "Administrador"}</span>
+                                            <span className="text-[10px] text-muted-foreground leading-none">{restaurant?.name || "Cargando..."}</span>
+                                        </div>
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                    <div className="p-2 border-b">
-                                        <p className="font-medium">Juan Díaz</p>
-                                        <p className="text-sm text-muted-foreground">Gerente</p>
+                                <DropdownMenuContent align="end" className="w-64 p-2 shadow-xl border-2">
+                                    <div className="p-3 bg-muted/40 rounded-lg mb-2">
+                                        <p className="font-bold text-sm tracking-tight">{user?.name}</p>
+                                        <p className="text-xs text-muted-foreground font-medium">{user?.email}</p>
+                                        <Badge variant="secondary" className="mt-2 text-[10px] uppercase tracking-widest">{restaurant?.cuisine || 'Staff'}</Badge>
                                     </div>
-                                    <DropdownMenuItem className="gap-2">
-                                        <User className="w-4 h-4" />
-                                        Mi Perfil
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="gap-2">
-                                        <Settings className="w-4 h-4" />
-                                        Configuración
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive">
+                                    <Link to="/admin/configuracion">
+                                        <DropdownMenuItem className="gap-2 h-10 cursor-pointer">
+                                            <User className="w-4 h-4 text-primary" />
+                                            Mi Perfil (Ajustes)
+                                        </DropdownMenuItem>
+                                    </Link>
+                                    <Link to="/admin/configuracion">
+                                        <DropdownMenuItem className="gap-2 h-10 cursor-pointer">
+                                            <Settings className="w-4 h-4 text-primary" />
+                                            Configuración
+                                        </DropdownMenuItem>
+                                    </Link>
+                                    <DropdownMenuSeparator className="my-2" />
+                                    <DropdownMenuItem onClick={handleLogout} className="gap-2 h-10 text-destructive focus:text-destructive focus:bg-destructive/5 font-bold cursor-pointer transition-colors">
                                         <LogOut className="w-4 h-4" />
                                         Cerrar Sesión
                                     </DropdownMenuItem>

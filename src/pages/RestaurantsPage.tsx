@@ -4,7 +4,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SearchFilters from '@/components/SearchFilters';
 import RestaurantCard from '@/components/RestaurantCard';
-import { restaurants } from '@/data/mockData';
+import { useRestaurants } from '@/hooks/useData';
 
 const RestaurantsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -12,19 +12,13 @@ const RestaurantsPage = () => {
   const [selectedCuisine, setSelectedCuisine] = useState('Todos');
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
 
-  const filteredRestaurants = useMemo(() => {
-    return restaurants.filter((restaurant) => {
-      const matchesSearch = restaurant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        restaurant.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        restaurant.cuisine.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesZone = selectedZone === 'Todos' || restaurant.zone === selectedZone;
-      const matchesCuisine = selectedCuisine === 'Todos' || restaurant.cuisine === selectedCuisine;
-      const matchesAvailable = !showAvailableOnly || restaurant.isOpen;
-
-      return matchesSearch && matchesZone && matchesCuisine && matchesAvailable;
-    });
-  }, [searchQuery, selectedZone, selectedCuisine, showAvailableOnly]);
+  // Fetch restaurants from API with filters
+  const { data: restaurants = [], isLoading } = useRestaurants({
+    search: searchQuery || undefined,
+    zone: selectedZone !== 'Todos' ? selectedZone : undefined,
+    cuisine: selectedCuisine !== 'Todos' ? selectedCuisine : undefined,
+    isOpen: showAvailableOnly ? true : undefined,
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,14 +62,27 @@ const RestaurantsPage = () => {
           {/* Results Count */}
           <div className="mb-6">
             <p className="text-muted-foreground">
-              {filteredRestaurants.length} restaurante{filteredRestaurants.length !== 1 ? 's' : ''} encontrado{filteredRestaurants.length !== 1 ? 's' : ''}
+              {isLoading ? 'Cargando...' : `${restaurants.length} restaurante${restaurants.length !== 1 ? 's' : ''} encontrado${restaurants.length !== 1 ? 's' : ''}`}
             </p>
           </div>
 
           {/* Restaurant Grid */}
-          {filteredRestaurants.length > 0 ? (
+          {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredRestaurants.map((restaurant, index) => (
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-card rounded-2xl overflow-hidden shadow-card animate-pulse">
+                  <div className="h-52 bg-muted" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-6 bg-muted rounded w-3/4" />
+                    <div className="h-4 bg-muted rounded w-full" />
+                    <div className="h-4 bg-muted rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : restaurants.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {restaurants.map((restaurant, index) => (
                 <RestaurantCard key={restaurant.id} restaurant={restaurant} index={index} />
               ))}
             </div>

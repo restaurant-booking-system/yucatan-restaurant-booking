@@ -3,8 +3,11 @@ import { motion } from 'framer-motion';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { zones, cuisines } from '@/data/mockData';
 import { cn } from '@/lib/utils';
+
+// Static filter options
+const zones = ['Todos', 'Centro', 'Montejo', 'Norte', 'Oriente', 'Poniente'];
+const cuisines = ['Todos', 'Yucateca', 'Mariscos', 'Fusión', 'Internacional', 'Italiana', 'Mexicana'];
 
 interface SearchFiltersProps {
   searchQuery: string;

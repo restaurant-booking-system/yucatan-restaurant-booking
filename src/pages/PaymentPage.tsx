@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { restaurants } from '@/data/mockData';
+import { useRestaurant } from '@/hooks/useData';
 import { cn } from '@/lib/utils';
 
 const paymentMethods = [
@@ -24,7 +24,7 @@ const PaymentPage = () => {
     const { id } = useParams();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const restaurant = restaurants.find(r => r.id === id);
+    const { data: restaurant, isLoading } = useRestaurant(id);
 
     const depositAmount = parseInt(searchParams.get('amount') || '200');
     const date = searchParams.get('date') || '';

@@ -12,7 +12,7 @@ const Footer = () => {
               <div className="w-10 h-10 rounded-full bg-primary-foreground flex items-center justify-center">
                 <span className="text-primary font-display text-xl">M</span>
               </div>
-              <span className="font-display text-xl font-semibold">MesaYucatán</span>
+              <span className="font-display text-xl font-semibold">Sittara</span>
             </div>
             <p className="text-primary-foreground/80 mb-4 max-w-md">
               La mejor experiencia para reservar tu mesa en los restaurantes más exclusivos de Mérida, Yucatán.
@@ -52,14 +52,14 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4" />
-                hola@mesayucatan.com
+                hola@Sittara.com
               </li>
             </ul>
           </div>
         </div>
 
         <div className="mt-12 pt-8 border-t border-primary-foreground/20 text-center text-primary-foreground/60 text-sm">
-          <p>© 2024 MesaYucatán. Todos los derechos reservados.</p>
+          <p>© 2026 Sittara. Todos los derechos reservados.</p>
         </div>
       </div>
     </footer>

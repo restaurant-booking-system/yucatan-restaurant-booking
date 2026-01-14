@@ -28,11 +28,11 @@ import {
 } from '@/components/ui/tooltip';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { cn } from '@/lib/utils';
-import { mesas } from '@/data/mockData';
-import { Mesa } from '@/types/restaurant';
+import { useTables } from '@/hooks/useData';
+import { Table, TableStatus } from '@/types';
 
-// Extended mock data for admin view
-const adminMesas: (Mesa & {
+// Extended table type for admin view
+type AdminTable = Table & {
     currentReservation?: {
         customerName: string;
         time: string;
@@ -44,21 +44,20 @@ const adminMesas: (Mesa & {
         time: string;
         guests: number;
     };
-})[] = [
-        { ...mesas[0], status: 'disponible' },
-        { ...mesas[1], status: 'ocupada', currentReservation: { customerName: 'María García', time: '13:00', guests: 2, arrivedAt: '13:05' } },
-        { ...mesas[2], status: 'ocupada', currentReservation: { customerName: 'Carlos López', time: '12:30', guests: 4, arrivedAt: '12:35' }, nextReservation: { customerName: 'Ana Torres', time: '14:30', guests: 3 } },
-        { ...mesas[3], status: 'reservada', nextReservation: { customerName: 'Roberto Sánchez', time: '14:00', guests: 4 } },
-        { ...mesas[4], status: 'pendiente', nextReservation: { customerName: 'Laura Martínez', time: '13:30', guests: 6 } },
-        { ...mesas[5], status: 'disponible' },
-        { ...mesas[6], status: 'ocupada', currentReservation: { customerName: 'Pedro Hernández', time: '12:00', guests: 8, arrivedAt: '12:10' } },
-        { ...mesas[7], status: 'disponible' },
-        { ...mesas[8], status: 'reservada', nextReservation: { customerName: 'Elena Castro', time: '14:30', guests: 2 } },
-        { ...mesas[9], status: 'disponible' },
-    ];
+};
 
 const TableMapOperativePage = () => {
-    const [selectedMesa, setSelectedMesa] = useState<typeof adminMesas[0] | null>(null);
+    // TODO: Get restaurant ID from context/auth
+    const restaurantId = '1';
+    const { data: tablesData = [], isLoading } = useTables(restaurantId);
+
+    // Cast tables to admin type (in real app, this data would come with reservation info)
+    const adminMesas: AdminTable[] = tablesData.map(table => ({
+        ...table,
+        // Placeholder - in real app, the API would provide reservation data
+    }));
+
+    const [selectedMesa, setSelectedMesa] = useState<AdminTable | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [zoom, setZoom] = useState(1);
     const [autoRefresh, setAutoRefresh] = useState(true);
@@ -75,7 +74,7 @@ const TableMapOperativePage = () => {
         .filter(m => m.status === 'ocupada')
         .reduce((sum, m) => sum + (m.currentReservation?.guests || 0), 0);
 
-    const getMesaClasses = (status: Mesa['status']) => {
+    const getMesaClasses = (status: TableStatus) => {
         const base = 'rounded-xl transition-all duration-300 cursor-pointer flex flex-col items-center justify-center font-semibold border-2 hover:scale-105';
         switch (status) {
             case 'disponible':

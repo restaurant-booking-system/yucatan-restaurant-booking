@@ -7,10 +7,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { restaurants, offers } from '@/data/mockData';
+import { useOffers, useRestaurants } from '@/hooks/useData';
 
 const OffersPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Fetch data from API
+    const { data: offers = [], isLoading: loadingOffers } = useOffers();
+    const { data: restaurants = [], isLoading: loadingRestaurants } = useRestaurants();
+
+    const isLoading = loadingOffers || loadingRestaurants;
 
     // Combine offers with restaurant info
     const offersWithRestaurants = offers.map(offer => {

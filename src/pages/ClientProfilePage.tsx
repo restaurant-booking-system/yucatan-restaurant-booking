@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  User, Mail, Phone, MapPin, Bell, Heart, Star, 
+import {
+  User, Mail, Phone, MapPin, Bell, Heart, Star,
   ChevronRight, Settings, LogOut, Camera, Shield,
   Calendar, Award, Edit2, Check, X
 } from 'lucide-react';
@@ -16,7 +16,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { restaurants } from '@/data/mockData';
+import { useRestaurants } from '@/hooks/useData';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { User as UserType } from '@/types';
 
 // Mock user data
 const mockUser = {
@@ -46,23 +50,69 @@ const achievements = [
 ];
 
 const ClientProfilePage = () => {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, isLoading, updateUser, logout: authLogout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [userData, setUserData] = useState(mockUser);
-  const [notifications, setNotifications] = useState(mockUser.notifications);
+  const [formData, setFormData] = useState<Partial<UserType>>({});
 
-  const favoriteRestaurantsList = restaurants.filter(r => 
-    userData.favoriteRestaurants.includes(r.id)
+  // Use a refined notification state that defaults to something sensible
+  const [notifications, setNotifications] = useState({
+    email: true,
+    push: true,
+    sms: false,
+    marketing: true,
+  });
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+      });
+      // Handle preferences if they exist in user object
+      if (user.preferences) {
+        setNotifications({
+          ...notifications,
+          ...user.preferences.notifications,
+          marketing: user.preferences.notifications.marketing ?? notifications.marketing
+        });
+      }
+    }
+  }, [user]);
+
+  // Fetch restaurants from API
+  const { data: restaurants = [] } = useRestaurants();
+
+  if (isLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center">Cargando perfil...</div>;
+  }
+
+  const favoriteRestaurantsList = restaurants.filter(r =>
+    (user.favoriteRestaurants || []).includes(r.id)
   );
 
   const handleSave = () => {
+    updateUser(formData);
     setIsEditing(false);
-    // Here would save to backend
+    // Success toast?
+  };
+
+  const handleLogout = () => {
+    authLogout();
+    navigate('/');
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="pt-20 pb-16">
         {/* Hero Section */}
         <div className="relative bg-gradient-to-b from-primary/20 to-background">
@@ -75,9 +125,9 @@ const ClientProfilePage = () => {
               {/* Avatar Section */}
               <div className="relative group">
                 <Avatar className="w-32 h-32 border-4 border-white shadow-elevated">
-                  <AvatarImage src={userData.avatar} />
+                  <AvatarImage src={user.avatar} />
                   <AvatarFallback className="text-3xl font-display bg-primary text-primary-foreground">
-                    {userData.name.split(' ').map(n => n[0]).join('')}
+                    {user?.name ? user.name.split(' ').map(n => n[0]).join('') : 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <button className="absolute bottom-0 right-0 p-2 bg-secondary text-secondary-foreground rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
@@ -88,19 +138,19 @@ const ClientProfilePage = () => {
               {/* User Info */}
               <div className="text-center md:text-left flex-1">
                 <h1 className="text-3xl font-display font-bold mb-2">
-                  {userData.name}
+                  {user.name}
                 </h1>
                 <p className="text-muted-foreground mb-4">
-                  Miembro desde {new Date(userData.memberSince).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+                  Miembro desde {new Date(user.createdAt || Date.now()).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
                 </p>
                 <div className="flex flex-wrap gap-4 justify-center md:justify-start">
                   <Badge variant="secondary" className="gap-2 px-4 py-2">
                     <Calendar className="w-4 h-4" />
-                    {userData.totalReservations} reservaciones
+                    {user.reservationsCount || 0} reservaciones
                   </Badge>
                   <Badge variant="outline" className="gap-2 px-4 py-2">
                     <Heart className="w-4 h-4" />
-                    {userData.favoriteRestaurants.length} favoritos
+                    {(user.favoriteRestaurants || []).length} favoritos
                   </Badge>
                 </div>
               </div>
@@ -160,7 +210,7 @@ const ClientProfilePage = () => {
               >
                 <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
                   <h3 className="text-xl font-display font-semibold">Datos Personales</h3>
-                  
+
                   <div className="grid gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="name" className="flex items-center gap-2">
@@ -169,8 +219,8 @@ const ClientProfilePage = () => {
                       </Label>
                       <Input
                         id="name"
-                        value={userData.name}
-                        onChange={(e) => setUserData({...userData, name: e.target.value})}
+                        value={formData.name || ''}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         disabled={!isEditing}
                         className="bg-background"
                       />
@@ -184,8 +234,8 @@ const ClientProfilePage = () => {
                       <Input
                         id="email"
                         type="email"
-                        value={userData.email}
-                        onChange={(e) => setUserData({...userData, email: e.target.value})}
+                        value={formData.email || ''}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         disabled={!isEditing}
                         className="bg-background"
                       />
@@ -198,8 +248,8 @@ const ClientProfilePage = () => {
                       </Label>
                       <Input
                         id="phone"
-                        value={userData.phone}
-                        onChange={(e) => setUserData({...userData, phone: e.target.value})}
+                        value={formData.phone || ''}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         disabled={!isEditing}
                         className="bg-background"
                       />
@@ -214,15 +264,13 @@ const ClientProfilePage = () => {
                     {achievements.map((achievement) => (
                       <div
                         key={achievement.id}
-                        className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
-                          achievement.earned 
-                            ? 'border-primary bg-primary/5' 
-                            : 'border-muted opacity-50'
-                        }`}
+                        className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${achievement.earned
+                          ? 'border-primary bg-primary/5'
+                          : 'border-muted opacity-50'
+                          }`}
                       >
-                        <achievement.icon className={`w-8 h-8 mb-2 ${
-                          achievement.earned ? 'text-primary' : 'text-muted-foreground'
-                        }`} />
+                        <achievement.icon className={`w-8 h-8 mb-2 ${achievement.earned ? 'text-primary' : 'text-muted-foreground'
+                          }`} />
                         <span className="text-sm font-medium text-center">
                           {achievement.name}
                         </span>
@@ -242,7 +290,7 @@ const ClientProfilePage = () => {
               >
                 <div className="bg-card rounded-2xl p-6 shadow-card">
                   <h3 className="text-xl font-display font-semibold mb-6">Restaurantes Favoritos</h3>
-                  
+
                   {favoriteRestaurantsList.length > 0 ? (
                     <div className="space-y-4">
                       {favoriteRestaurantsList.map((restaurant) => (
@@ -296,7 +344,7 @@ const ClientProfilePage = () => {
                     <Bell className="w-5 h-5 text-primary" />
                     <h3 className="text-xl font-display font-semibold">Notificaciones</h3>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between py-3">
                       <div>
@@ -305,7 +353,7 @@ const ClientProfilePage = () => {
                       </div>
                       <Switch
                         checked={notifications.email}
-                        onCheckedChange={(checked) => setNotifications({...notifications, email: checked})}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, email: checked })}
                       />
                     </div>
                     <Separator />
@@ -316,7 +364,7 @@ const ClientProfilePage = () => {
                       </div>
                       <Switch
                         checked={notifications.push}
-                        onCheckedChange={(checked) => setNotifications({...notifications, push: checked})}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, push: checked })}
                       />
                     </div>
                     <Separator />
@@ -327,7 +375,7 @@ const ClientProfilePage = () => {
                       </div>
                       <Switch
                         checked={notifications.sms}
-                        onCheckedChange={(checked) => setNotifications({...notifications, sms: checked})}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, sms: checked })}
                       />
                     </div>
                     <Separator />
@@ -338,7 +386,7 @@ const ClientProfilePage = () => {
                       </div>
                       <Switch
                         checked={notifications.marketing}
-                        onCheckedChange={(checked) => setNotifications({...notifications, marketing: checked})}
+                        onCheckedChange={(checked) => setNotifications({ ...notifications, marketing: checked })}
                       />
                     </div>
                   </div>
@@ -350,13 +398,13 @@ const ClientProfilePage = () => {
                     <MapPin className="w-5 h-5 text-primary" />
                     <h3 className="text-xl font-display font-semibold">Preferencias de Comida</h3>
                   </div>
-                  
+
                   <div className="grid gap-6">
                     <div>
                       <Label className="mb-2 block">Zona preferida</Label>
                       <select
-                        value={userData.preferredZone}
-                        onChange={(e) => setUserData({...userData, preferredZone: e.target.value})}
+                        value={user.preferences?.preferredZones?.[0] || 'Centro'}
+                        onChange={(e) => updateUser({ preferences: { ...user.preferences, preferredZones: [e.target.value] } } as any)}
                         className="w-full px-4 py-3 rounded-lg border bg-background"
                       >
                         <option value="Centro">Centro</option>
@@ -367,8 +415,8 @@ const ClientProfilePage = () => {
                     <div>
                       <Label className="mb-2 block">Tipo de cocina favorita</Label>
                       <select
-                        value={userData.preferredCuisine}
-                        onChange={(e) => setUserData({...userData, preferredCuisine: e.target.value})}
+                        value={user.preferences?.preferredCuisines?.[0] || 'Yucateca'}
+                        onChange={(e) => updateUser({ preferences: { ...user.preferences, preferredCuisines: [e.target.value] } } as any)}
                         className="w-full px-4 py-3 rounded-lg border bg-background"
                       >
                         <option value="Yucateca">Yucateca</option>
@@ -391,7 +439,7 @@ const ClientProfilePage = () => {
               >
                 <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
                   <h3 className="text-xl font-display font-semibold">Cambiar Contraseña</h3>
-                  
+
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="currentPassword">Contraseña actual</Label>
@@ -411,14 +459,14 @@ const ClientProfilePage = () => {
 
                 <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
                   <h3 className="text-xl font-display font-semibold text-destructive">Zona de Peligro</h3>
-                  
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 rounded-lg bg-destructive/5 border border-destructive/20">
                       <div>
                         <p className="font-medium text-destructive">Cerrar sesión</p>
                         <p className="text-sm text-muted-foreground">Cierra tu sesión en este dispositivo</p>
                       </div>
-                      <Button variant="destructive" size="sm" className="gap-2">
+                      <Button variant="destructive" size="sm" className="gap-2" onClick={handleLogout}>
                         <LogOut className="w-4 h-4" />
                         Cerrar sesión
                       </Button>

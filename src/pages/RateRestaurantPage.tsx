@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { restaurants } from '@/data/mockData';
+import { useRestaurant } from '@/hooks/useData';
 import { cn } from '@/lib/utils';
 
 // Aspectos a calificar
@@ -33,7 +33,7 @@ const quickTags = [
 const RateRestaurantPage = () => {
     const { id, reservationId } = useParams();
     const navigate = useNavigate();
-    const restaurant = restaurants.find(r => r.id === id);
+    const { data: restaurant, isLoading } = useRestaurant(id);
 
     const [step, setStep] = useState(1);
     const [overallRating, setOverallRating] = useState(0);

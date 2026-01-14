@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Calendar, Users, Heart, Gift, Briefcase, PartyPopper, MessageSquare, CreditCard, Check, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -11,8 +10,8 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import TableMap from '@/components/TableMap';
 import TimeSlotPicker from '@/components/TimeSlotPicker';
-import { restaurants, mesas, timeSlots } from '@/data/mockData';
-import { Mesa } from '@/types/restaurant';
+import { useRestaurant, useAvailableTables, useTimeSlots } from '@/hooks/useData';
+import { Table } from '@/types';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -28,18 +27,34 @@ const occasions = [
 const ReservationPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const restaurant = restaurants.find(r => r.id === id);
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // Fetch restaurant data from API
+  const { data: restaurant, isLoading: restaurantLoading } = useRestaurant(id);
 
   const [step, setStep] = useState<ReservationStep>('date');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
+  const [selectedMesa, setSelectedMesa] = useState<Table | null>(null);
   const [guestCount, setGuestCount] = useState(2);
   const [selectedOccasion, setSelectedOccasion] = useState<string | null>(null);
   const [specialRequest, setSpecialRequest] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+
+  // Fetch time slots for selected date
+  const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : '';
+  const { data: timeSlots = [] } = useTimeSlots(id || '', dateStr);
+
+  // Fetch available tables based on date, time, and guest count
+  const { data: availableTables = [], isLoading: tablesLoading } = useAvailableTables(
+    id || '',
+    dateStr,
+    selectedTime || '',
+    guestCount
+  );
+
+  const isLoading = authLoading || restaurantLoading;
 
   // Redirect to login if not authenticated
   if (!isLoading && !isAuthenticated) {
@@ -326,10 +341,10 @@ const ReservationPage = () => {
                 </div>
 
                 <TableMap
-                  mesas={mesas}
-                  selectedMesa={selectedMesa}
-                  onSelectMesa={setSelectedMesa}
-                  guestCount={guestCount}
+                  tables={availableTables}
+                  selectedTableId={selectedMesa?.id}
+                  onTableSelect={(table) => setSelectedMesa(table)}
+                  isLoading={tablesLoading}
                 />
               </div>
             )}

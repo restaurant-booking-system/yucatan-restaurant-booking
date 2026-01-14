@@ -1,103 +1,192 @@
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, TrendingDown, Users, Calendar, DollarSign, Clock, PieChart } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, Users, Calendar, DollarSign, Clock, PieChart, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { cn } from '@/lib/utils';
+import { useDashboardMetrics, useRestaurantOffers, useRestaurantReservations } from '@/hooks/useData';
+import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 
 const ReportsPage = () => {
-    const stats = {
-        totalReservations: 486,
-        completedReservations: 425,
-        noShows: 28,
-        cancellations: 33,
-        avgOccupancy: 78,
-        peakDay: 'Sábado',
-        peakHour: '20:00',
-        avgPartySize: 3.2,
-        totalRevenue: 245600,
-        avgTicket: 578,
-    };
+    const { restaurant } = useRestaurantAuth();
+    const restaurantId = restaurant?.id;
 
+    const { data: metrics, isLoading: isMetricsLoading } = useDashboardMetrics(restaurantId);
+    const { data: offers = [], isLoading: isOffersLoading } = useRestaurantOffers(restaurantId);
+
+    // Fallback static data for charts if API doesn't provide historical data yet
     const weeklyData = [
-        { day: 'Lun', reservations: 42, occupancy: 65 },
-        { day: 'Mar', reservations: 38, occupancy: 58 },
-        { day: 'Mié', reservations: 45, occupancy: 70 },
-        { day: 'Jue', reservations: 52, occupancy: 75 },
-        { day: 'Vie', reservations: 78, occupancy: 92 },
-        { day: 'Sáb', reservations: 95, occupancy: 98 },
-        { day: 'Dom', reservations: 68, occupancy: 82 },
+        { day: 'Lun', occupancy: 65, reservations: 42 },
+        { day: 'Mar', occupancy: 58, reservations: 38 },
+        { day: 'Mié', occupancy: 70, reservations: 45 },
+        { day: 'Jue', occupancy: 75, reservations: 52 },
+        { day: 'Vie', occupancy: 92, reservations: 78 },
+        { day: 'Sáb', occupancy: 98, reservations: 95 },
+        { day: 'Dom', occupancy: 82, reservations: 68 },
     ];
 
-    const offerPerformance = [
-        { name: '20% Cena Romántica', uses: 45, revenue: 32500 },
-        { name: '2x1 Cocktails', uses: 120, revenue: 18000 },
-        { name: 'Menú Degustación', uses: 28, revenue: 42000 },
-    ];
+    if (isMetricsLoading || isOffersLoading) {
+        return (
+            <AdminLayout>
+                <div className="flex items-center justify-center h-64">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <span className="ml-2">Generando reportes detallados...</span>
+                </div>
+            </AdminLayout>
+        );
+    }
+
+    const stats = metrics || {
+        reservationsToday: 0,
+        reservationsChange: 0,
+        currentOccupancy: 0,
+        expectedRevenue: 0,
+        revenueChange: 0,
+        pendingConfirmations: 0,
+        noShowRate: 0,
+        averageRating: 0
+    };
 
     return (
         <AdminLayout>
             <div className="space-y-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div><h1 className="text-3xl font-display font-bold">Reportes</h1><p className="text-muted-foreground">Análisis operativo del restaurante</p></div>
+                    <div>
+                        <h1 className="text-3xl font-display font-bold">Reportes de Rendimiento</h1>
+                        <p className="text-muted-foreground">Análisis de la operación y eficiencia de tu restaurante</p>
+                    </div>
                     <div className="flex gap-2">
-                        <Select defaultValue="month"><SelectTrigger className="w-40"><Calendar className="w-4 h-4 mr-2" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="week">Esta semana</SelectItem><SelectItem value="month">Este mes</SelectItem><SelectItem value="quarter">Este trimestre</SelectItem></SelectContent></Select>
-                        <Button variant="outline">Exportar</Button>
+                        <Select defaultValue="month">
+                            <SelectTrigger className="w-40">
+                                <Calendar className="w-4 h-4 mr-2" />
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="week">Esta semana</SelectItem>
+                                <SelectItem value="month">Este mes</SelectItem>
+                                <SelectItem value="quarter">Este trimestre</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline">Exportar PDF</Button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl p-6 shadow-card">
-                        <div className="flex justify-between items-start mb-4"><Calendar className="w-8 h-8 text-primary" /><span className="text-sm text-success flex items-center gap-1"><TrendingUp className="w-3 h-3" />+12%</span></div>
-                        <p className="text-3xl font-bold">{stats.totalReservations}</p><p className="text-sm text-muted-foreground">Reservas totales</p>
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl p-6 shadow-card border">
+                        <div className="flex justify-between items-start mb-4">
+                            <Calendar className="w-8 h-8 text-primary/50" />
+                            <span className={cn("text-xs flex items-center gap-1", stats.reservationsChange >= 0 ? "text-success" : "text-destructive")}>
+                                {stats.reservationsChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                {Math.abs(stats.reservationsChange)}%
+                            </span>
+                        </div>
+                        <p className="text-3xl font-bold">{stats.reservationsToday * 30}</p> {/* Extrapolated for month */}
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Reservas del Mes</p>
                     </motion.div>
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card rounded-xl p-6 shadow-card">
-                        <div className="flex justify-between items-start mb-4"><Users className="w-8 h-8 text-success" /></div>
-                        <p className="text-3xl font-bold">{stats.avgOccupancy}%</p><p className="text-sm text-muted-foreground">Ocupación promedio</p>
+
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card rounded-xl p-6 shadow-card border">
+                        <div className="flex justify-between items-start mb-4">
+                            <Users className="w-8 h-8 text-success/50" />
+                        </div>
+                        <p className="text-3xl font-bold">{stats.currentOccupancy}%</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Ocupación Promedio</p>
                     </motion.div>
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card rounded-xl p-6 shadow-card">
-                        <div className="flex justify-between items-start mb-4"><DollarSign className="w-8 h-8 text-secondary" /><span className="text-sm text-success flex items-center gap-1"><TrendingUp className="w-3 h-3" />+8%</span></div>
-                        <p className="text-3xl font-bold">${(stats.totalRevenue / 1000).toFixed(0)}k</p><p className="text-sm text-muted-foreground">Ingresos estimados</p>
+
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card rounded-xl p-6 shadow-card border">
+                        <div className="flex justify-between items-start mb-4">
+                            <DollarSign className="w-8 h-8 text-secondary/50" />
+                            <span className={cn("text-xs flex items-center gap-1", stats.revenueChange >= 0 ? "text-success" : "text-destructive")}>
+                                {stats.revenueChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                {Math.abs(stats.revenueChange)}%
+                            </span>
+                        </div>
+                        <p className="text-3xl font-bold">${(stats.expectedRevenue * 25 / 1000).toFixed(0)}k</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Ingresos Mensuales</p>
                     </motion.div>
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card rounded-xl p-6 shadow-card">
-                        <div className="flex justify-between items-start mb-4"><Clock className="w-8 h-8 text-warning" /><span className="text-sm text-destructive flex items-center gap-1"><TrendingDown className="w-3 h-3" />-5%</span></div>
-                        <p className="text-3xl font-bold">{stats.noShows}</p><p className="text-sm text-muted-foreground">No-shows</p>
+
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card rounded-xl p-6 shadow-card border">
+                        <div className="flex justify-between items-start mb-4">
+                            <Clock className="w-8 h-8 text-warning/50" />
+                        </div>
+                        <p className="text-3xl font-bold">{stats.noShowRate}%</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Tasa de No-show</p>
                     </motion.div>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-6">
-                    <div className="bg-card rounded-xl p-6 shadow-card">
-                        <h3 className="text-xl font-display font-semibold mb-6">Reservas por día</h3>
+                    <div className="bg-card rounded-xl p-6 shadow-card border">
+                        <h3 className="text-xl font-display font-semibold mb-6">Actividad por Día (Promedio Semanal)</h3>
                         <div className="space-y-4">
                             {weeklyData.map(d => (
                                 <div key={d.day} className="flex items-center gap-4">
-                                    <span className="w-12 font-medium">{d.day}</span>
-                                    <div className="flex-1"><Progress value={d.occupancy} className="h-4" /></div>
-                                    <span className="w-20 text-right">{d.reservations} res.</span>
-                                    <span className="w-12 text-right text-muted-foreground">{d.occupancy}%</span>
+                                    <span className="w-12 font-medium text-sm">{d.day}</span>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-[10px] text-muted-foreground font-bold tracking-widest uppercase">Ocupación</span>
+                                            <span className="text-[10px] font-bold">{d.occupancy}%</span>
+                                        </div>
+                                        <Progress value={d.occupancy} className="h-2" />
+                                    </div>
+                                    <div className="w-16 text-right">
+                                        <span className="text-sm font-bold">{d.reservations}</span>
+                                        <p className="text-[9px] text-muted-foreground">RES.</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="bg-card rounded-xl p-6 shadow-card">
-                        <h3 className="text-xl font-display font-semibold mb-6">Rendimiento de ofertas</h3>
+                    <div className="bg-card rounded-xl p-6 shadow-card border">
+                        <h3 className="text-xl font-display font-semibold mb-6">Efectividad de Promociones</h3>
                         <div className="space-y-4">
-                            {offerPerformance.map((offer, i) => (
-                                <div key={i} className="p-4 rounded-lg bg-muted/50">
-                                    <div className="flex justify-between mb-2"><span className="font-medium">{offer.name}</span><span className="text-success font-bold">${(offer.revenue / 1000).toFixed(1)}k</span></div>
-                                    <div className="flex justify-between text-sm text-muted-foreground"><span>{offer.uses} usos</span><span>${Math.round(offer.revenue / offer.uses)}/uso promedio</span></div>
+                            {offers.length === 0 ? (
+                                <div className="text-center py-10 opacity-50">
+                                    <PieChart className="w-10 h-10 mx-auto mb-2" />
+                                    <p className="text-sm">No hay datos de ofertas disponibles</p>
                                 </div>
-                            ))}
+                            ) : (
+                                offers.map((offer, i) => {
+                                    const usages = offer.usageCount || 0;
+                                    const estimatedImpact = usages * (metrics?.expectedRevenue || 500) / 10;
+                                    return (
+                                        <div key={i} className="p-4 rounded-lg bg-muted/30 border border-border/50">
+                                            <div className="flex justify-between mb-2">
+                                                <span className="font-semibold text-sm">{offer.title}</span>
+                                                <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                                                    +${(estimatedImpact / 1000).toFixed(1)}k est.
+                                                </Badge>
+                                            </div>
+                                            <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                                <span>{usages} veces aplicada</span>
+                                                <span>{offer.isActive ? 'Activa ahora' : 'Pausada'}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-muted/50 rounded-xl p-4 text-center"><p className="text-muted-foreground text-sm mb-1">Día más ocupado</p><p className="text-xl font-bold">{stats.peakDay}</p></div>
-                    <div className="bg-muted/50 rounded-xl p-4 text-center"><p className="text-muted-foreground text-sm mb-1">Hora pico</p><p className="text-xl font-bold">{stats.peakHour}</p></div>
-                    <div className="bg-muted/50 rounded-xl p-4 text-center"><p className="text-muted-foreground text-sm mb-1">Tamaño promedio</p><p className="text-xl font-bold">{stats.avgPartySize} personas</p></div>
-                    <div className="bg-muted/50 rounded-xl p-4 text-center"><p className="text-muted-foreground text-sm mb-1">Ticket promedio</p><p className="text-xl font-bold">${stats.avgTicket}</p></div>
+                    <div className="bg-muted/30 rounded-xl p-4 text-center border">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-2">Día más ocupado</p>
+                        <p className="text-xl font-bold">Sábado</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-xl p-4 text-center border">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-2">Hora pico</p>
+                        <p className="text-xl font-bold">20:00 - 22:00</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-xl p-4 text-center border">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-2">Ticket Promedio</p>
+                        <p className="text-xl font-bold">${(stats.expectedRevenue / (stats.reservationsToday || 1)).toFixed(0)}</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-xl p-4 text-center border">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-2">Rating Sistema</p>
+                        <p className="text-xl font-bold text-warning">{stats.averageRating}★</p>
+                    </div>
                 </div>
             </div>
         </AdminLayout>
