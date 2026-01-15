@@ -618,6 +618,7 @@ router.get('/menu', async (req: Request, res: Response) => {
 router.post('/menu', async (req: Request, res: Response) => {
     try {
         const restaurantId = (req as any).user?.restaurantId;
+
         const {
             name, description, price, category,
             image_url, is_highlighted, is_vegetarian, is_vegan
@@ -640,7 +641,10 @@ router.post('/menu', async (req: Request, res: Response) => {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase Insert Error:', error);
+            throw error;
+        }
 
         res.status(201).json({ success: true, data, message: 'Platillo agregado' });
     } catch (error) {

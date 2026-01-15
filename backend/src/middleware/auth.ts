@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import type { User } from '../types/database.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
@@ -60,7 +60,7 @@ export async function authMiddleware(
         }
 
         // Get user profile from our users table
-        const { data: userProfile, error: profileError } = await supabase
+        const { data: userProfile, error: profileError } = await supabaseAdmin
             .from('users')
             .select('*')
             .eq('id', userId)
@@ -347,7 +347,7 @@ export async function authenticateAdmin(
         }
 
         // Get user profile
-        const { data: userProfile, error: profileError } = await supabase
+        const { data: userProfile, error: profileError } = await supabaseAdmin
             .from('users')
             .select('*')
             .eq('id', userId)
@@ -371,7 +371,7 @@ export async function authenticateAdmin(
         }
 
         // Get the restaurant owned by this admin
-        const { data: restaurant } = await supabase
+        const { data: restaurant } = await supabaseAdmin
             .from('restaurants')
             .select('id')
             .eq('owner_id', userId)

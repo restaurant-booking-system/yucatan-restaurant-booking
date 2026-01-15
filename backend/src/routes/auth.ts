@@ -7,143 +7,7 @@ import crypto from 'crypto';
 
 const router = Router();
 
-// ===========================================
-// REGISTER RESTAURANT
-// ===========================================
-router.post('/register-restaurant', async (req: Request, res: Response) => {
-    try {
-        const {
-            owner_name,
-            email,
-            phone,
-            password,
-            restaurant
-        } = req.body;
 
-        // Validate required fields
-        if (!owner_name || !email || !password || !restaurant?.name) {
-            return res.status(400).json({
-                success: false,
-                error: 'Missing required fields: owner_name, email, password, and restaurant.name are required'
-            });
-        }
-
-        // Check if email already exists
-        const { data: existingUser } = await supabase
-            .from('restaurant_users')
-            .select('id')
-            .eq('email', email.toLowerCase())
-            .single();
-
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                error: 'Este correo ya está registrado'
-            });
-        }
-
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Create restaurant first
-        const { data: newRestaurant, error: restaurantError } = await supabaseAdmin
-            .from('restaurants')
-            .insert({
-                name: restaurant.name,
-                description: restaurant.description || '',
-                address: restaurant.address || '',
-                zone: restaurant.zone || 'Centro',
-                cuisine: restaurant.cuisine || 'Mexicana',
-                price_range: restaurant.price_range || '$$',
-                open_time: restaurant.open_time || '09:00',
-                close_time: restaurant.close_time || '22:00',
-                image: restaurant.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
-                rating: 0,
-                review_count: 0,
-                is_open: true,
-                has_offers: false,
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (restaurantError) {
-            console.error('Error creating restaurant:', restaurantError);
-            return res.status(500).json({
-                success: false,
-                error: 'Error al crear el restaurante: ' + restaurantError.message
-            });
-        }
-
-        // Create restaurant user/owner
-        const { data: newUser, error: userError } = await supabaseAdmin
-            .from('restaurant_users')
-            .insert({
-                restaurant_id: newRestaurant.id,
-                name: owner_name,
-                email: email.toLowerCase(),
-                phone: phone || '',
-                password_hash: hashedPassword,
-                role: 'owner',
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .select('id, name, email, role')
-            .single();
-
-        if (userError) {
-            // Rollback: delete the restaurant if user creation fails
-            await supabase.from('restaurants').delete().eq('id', newRestaurant.id);
-
-            console.error('Error creating user:', userError);
-            return res.status(500).json({
-                success: false,
-                error: 'Error al crear el usuario: ' + userError.message
-            });
-        }
-
-        // Generate JWT token
-        const token = jwt.sign(
-            {
-                userId: newUser.id,
-                restaurantId: newRestaurant.id,
-                email: newUser.email,
-                role: newUser.role
-            },
-            env.jwtSecret,
-            { expiresIn: '7d' }
-        );
-
-        res.status(201).json({
-            success: true,
-            message: 'Restaurante registrado exitosamente',
-            data: {
-                user: {
-                    id: newUser.id,
-                    name: newUser.name,
-                    email: newUser.email,
-                    role: newUser.role
-                },
-                restaurant: {
-                    id: newRestaurant.id,
-                    name: newRestaurant.name
-                },
-                token
-            }
-        });
-
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Error interno del servidor'
-        });
-    }
-});
 
 // ===========================================
 // CUSTOMER AUTH
@@ -230,10 +94,11 @@ router.post('/customer/login', async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
 
-        const { data: user, error } = await supabase
+        const { data: user, error } = await supabaseAdmin
             .from('users')
             .select('*')
             .eq('email', email.toLowerCase())
+            .limit(1)
             .single();
 
         if (error || !user) {
@@ -291,37 +156,62 @@ router.post('/restaurant/register', async (req: Request, res: Response) => {
         // Check if user already exists
         const { data: existingUser } = await supabase
             .from('users')
-            .select('id')
+            .select('*')
             .eq('email', email.toLowerCase())
             .single();
 
+        let userId = '';
+        let userToReturn = null;
+
         if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                error: 'Este correo ya está registrado'
-            });
+            // 1a. User exists -> Verify password to allow 'Upgrade'
+            const validPassword = await bcrypt.compare(password, existingUser.password_hash || '');
+
+            if (!validPassword) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Este correo ya está registrado y la contraseña no coincide'
+                });
+            }
+
+            userId = existingUser.id;
+
+            // Upgrade role if needed (customer -> restaurant_admin)
+            if (existingUser.role === 'customer') {
+                const { error: updateError } = await supabaseAdmin
+                    .from('users')
+                    .update({ role: 'restaurant_admin' })
+                    .eq('id', userId);
+
+                if (updateError) throw updateError;
+                existingUser.role = 'restaurant_admin';
+            }
+
+            userToReturn = existingUser;
+
+        } else {
+            // 1b. Create New User
+            userId = crypto.randomUUID();
+            const salt = await bcrypt.genSalt(10);
+            const passwordHash = await bcrypt.hash(password, salt);
+
+            const { data: newUser, error: userError } = await supabaseAdmin
+                .from('users')
+                .insert({
+                    id: userId,
+                    name: owner_name,
+                    email: email.toLowerCase(),
+                    phone: phone || '',
+                    password_hash: passwordHash,
+                    role: 'restaurant_admin',
+                    created_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+
+            if (userError) throw userError;
+            userToReturn = newUser;
         }
-
-        const userId = crypto.randomUUID();
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
-
-        // 1. Create User
-        const { data: newUser, error: userError } = await supabaseAdmin
-            .from('users')
-            .insert({
-                id: userId,
-                name: owner_name,
-                email: email.toLowerCase(),
-                phone: phone || '',
-                password_hash: passwordHash,
-                role: 'restaurant_admin',
-                created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (userError) throw userError;
 
         // 2. Create Restaurant
         const { data: restaurant, error: restError } = await supabaseAdmin
@@ -350,7 +240,7 @@ router.post('/restaurant/register', async (req: Request, res: Response) => {
 
         // Generate Token
         const token = jwt.sign(
-            { userId: newUser.id, restaurantId: restaurant.id, email: newUser.email, role: newUser.role },
+            { userId: userToReturn.id, restaurantId: restaurant.id, email: userToReturn.email, role: userToReturn.role },
             env.jwtSecret,
             { expiresIn: '7d' }
         );
@@ -358,7 +248,7 @@ router.post('/restaurant/register', async (req: Request, res: Response) => {
         res.status(201).json({
             success: true,
             data: {
-                user: newUser,
+                user: userToReturn,
                 restaurant,
                 token
             }
@@ -381,11 +271,12 @@ router.post('/restaurant/login', async (req: Request, res: Response) => {
             });
         }
 
-        // Find user by email in the unified users table
-        const { data: user, error } = await supabase
+        // Check if user already exists
+        const { data: user, error } = await supabaseAdmin
             .from('users')
             .select('*')
             .eq('email', email.toLowerCase())
+            .limit(1)
             .single();
 
         if (error || !user) {
@@ -405,6 +296,7 @@ router.post('/restaurant/login', async (req: Request, res: Response) => {
 
         // Verify password
         const isValidPassword = await bcrypt.compare(password, user.password_hash || '');
+
         if (!isValidPassword) {
             return res.status(401).json({
                 success: false,
@@ -412,8 +304,8 @@ router.post('/restaurant/login', async (req: Request, res: Response) => {
             });
         }
 
-        // Get the restaurant(s) owned by this user
-        const { data: restaurant } = await supabase
+        // Get the restaurant owned by this user
+        const { data: restaurant } = await supabaseAdmin
             .from('restaurants')
             .select('*')
             .eq('owner_id', user.id)

@@ -19,6 +19,9 @@ const mockFrom = jest.fn();
 jest.mock('../config/supabase.js', () => ({
     supabase: {
         from: mockFrom
+    },
+    supabaseAdmin: {
+        from: mockFrom
     }
 }));
 
@@ -26,9 +29,11 @@ jest.mock('../config/supabase.js', () => ({
 import app from '../index.js';
 
 const setupSupabaseMock = () => {
+    // Reset mocks for each test
     mockFrom.mockReturnValue({
         select: mockSelect,
         insert: mockInsert,
+        update: jest.fn().mockReturnValue({ eq: mockEq }), // Add update for role upgrade
         delete: mockDelete
     });
 
@@ -162,6 +167,92 @@ describe('Auth Endpoints', () => {
                 });
 
             expect(res.statusCode).toBe(401);
+        });
+    });
+
+    describe('POST /api/auth/restaurant/register', () => {
+        it('should register a new restaurant owner and restaurant', async () => {
+            // 1. Check existing user -> null
+            mockSingle.mockResolvedValueOnce({ data: null, error: null });
+
+            // 2. Create User -> success
+            const newUser = { id: 'user1', email: 'owner@test.com', role: 'restaurant_admin' };
+            mockSingle.mockResolvedValueOnce({ data: newUser, error: null });
+
+            // 3. Create Restaurant -> success
+            const newRest = { id: 'rest1', name: 'New Rest' };
+            mockSingle.mockResolvedValueOnce({ data: newRest, error: null });
+
+            const res = await request(app)
+                .post('/api/auth/restaurant/register')
+                .send({
+                    owner_name: 'Owner',
+                    email: 'owner@test.com',
+                    password: 'pass',
+                    restaurant: { name: 'New Rest' }
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.data.user.id).toBe('user1');
+            expect(res.body.data.restaurant.id).toBe('rest1');
+        });
+
+        it('should upgrade existing customer to restaurant admin if credentials match', async () => {
+            // 1. Check existing user -> Found (customer)
+            const existingUser = {
+                id: 'user1',
+                email: 'owner@test.com',
+                role: 'customer',
+                password_hash: 'hashed'
+            };
+            mockSingle.mockResolvedValueOnce({ data: existingUser, error: null });
+
+            // 2. Verify password -> Matches (via mock implementation, verify bcrypt call)
+            // (default mock is true)
+
+            // 3. Update Role -> success (mocked by setupSupabaseMock update())
+            // Note: we need to ensure mockFrom.update works. update() returns { eq: ... }
+
+            // 4. Create Restaurant -> success
+            const newRest = { id: 'rest1', name: 'New Rest' };
+            mockSingle.mockResolvedValueOnce({ data: newRest, error: null });
+
+            const res = await request(app)
+                .post('/api/auth/restaurant/register')
+                .send({
+                    owner_name: 'Owner',
+                    email: 'owner@test.com',
+                    password: 'pass',
+                    restaurant: { name: 'New Rest' }
+                });
+
+            expect(res.statusCode).toBe(201);
+            expect(res.body.data.user.role).toBe('restaurant_admin');
+            // Check that role was actually updated? We'd need to spy on mockFrom
+        });
+
+        it('should fail if email exists but password does not match', async () => {
+            // 1. Check existing user -> Found
+            mockSingle.mockResolvedValueOnce({
+                data: { id: 'user1', password_hash: 'hashed' },
+                error: null
+            });
+
+            // 2. Compare password -> false
+            const bcrypt = require('bcryptjs');
+            bcrypt.compare.mockResolvedValueOnce(false);
+
+            const res = await request(app)
+                .post('/api/auth/restaurant/register')
+                .send({
+                    owner_name: 'Owner',
+                    email: 'owner@test.com',
+                    password: 'wrongpass',
+                    restaurant: { name: 'New Rest' }
+                });
+
+            expect(res.statusCode).toBe(400); // 400 for bad password on existing account
+            expect(res.body.error).toMatch(/contraseña no coincide/i);
         });
     });
 });

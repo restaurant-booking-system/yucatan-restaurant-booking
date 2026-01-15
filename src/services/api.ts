@@ -453,10 +453,20 @@ function generateDefaultTimeSlots(): TimeSlot[] {
 
 export const menuService = {
     async getByRestaurant(restaurantId: string): Promise<MenuItem[]> {
-        const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/menu`);
+        // Get token from localStorage
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/menu`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
         const json = await response.json();
 
         if (!json.success) {
+            console.error('Error fetching menu:', json.error);
             return [];
         }
 
@@ -464,23 +474,88 @@ export const menuService = {
     },
 
     async create(item: Omit<MenuItem, 'id'>): Promise<MenuItem> {
-        const data = await apiCall<any>('/menu-items', {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/menu`, {
             method: 'POST',
-            body: JSON.stringify(item),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                name: item.name,
+                description: item.description,
+                price: item.price,
+                category: item.category,
+                image_url: item.image,
+                is_highlighted: item.isHighlighted,
+                is_vegetarian: false,
+                is_vegan: false
+            }),
         });
-        return transformMenuItem(data);
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(error.error || `HTTP error! status: ${response.status}`);
+        }
+
+        const json = await response.json();
+        if (!json.success) {
+            throw new Error(json.error || 'Failed to create menu item');
+        }
+        return transformMenuItem(json.data);
     },
 
     async update(itemId: string, updates: Partial<MenuItem>): Promise<MenuItem> {
-        const data = await apiCall<any>(`/menu-items/${itemId}`, {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/menu/${itemId}`, {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                name: updates.name,
+                description: updates.description,
+                price: updates.price,
+                category: updates.category,
+                image_url: updates.image,
+                is_highlighted: updates.isHighlighted,
+                is_available: updates.isAvailable
+            }),
         });
-        return transformMenuItem(data);
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(error.error || `HTTP error! status: ${response.status}`);
+        }
+
+        const json = await response.json();
+        if (!json.success) {
+            throw new Error(json.error || 'Failed to update menu item');
+        }
+        return transformMenuItem(json.data);
     },
 
     async delete(itemId: string): Promise<void> {
-        await fetch(`${API_BASE_URL}/menu-items/${itemId}`, { method: 'DELETE' });
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/menu/${itemId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(error.error || `HTTP error! status: ${response.status}`);
+        }
     },
 };
 
@@ -687,7 +762,7 @@ export const authService = {
         }
     },
 
-    async loginRestaurant(email: string, password: string): Promise<{ user: User; restaurant: Restaurant } | null> {
+    async loginRestaurant(email: string, password: string): Promise<{ user: User; restaurant: Restaurant; token: string } | null> {
         try {
             const response = await fetch(`${API_BASE_URL}/auth/restaurant/login`, {
                 method: 'POST',
@@ -695,12 +770,13 @@ export const authService = {
                 body: JSON.stringify({ email, password }),
             });
 
-            const data: ApiResponse<{ user: User; restaurant: any }> = await response.json();
+            const data: ApiResponse<{ user: User; restaurant: any; token: string }> = await response.json();
 
             if (data.success && data.data) {
                 return {
                     user: data.data.user,
-                    restaurant: transformRestaurant(data.data.restaurant)
+                    restaurant: transformRestaurant(data.data.restaurant),
+                    token: data.data.token
                 };
             }
             return null;
