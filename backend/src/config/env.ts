@@ -49,8 +49,8 @@ export const env: EnvConfig = {
 
     // Supabase
     supabaseUrl: getEnvVar('SUPABASE_URL', 'https://placeholder.supabase.co'),
-    supabaseAnonKey: getEnvVar('SUPABASE_ANON_KEY', 'placeholder-anon-key'),
-    supabaseServiceRoleKey: getEnvVarOptional('SUPABASE_SERVICE_ROLE_KEY'),
+    supabaseAnonKey: getEnvVar('SUPABASE_ANON_KEY', process.env.SUPABASE_KEY || 'placeholder-anon-key'),
+    supabaseServiceRoleKey: getEnvVarOptional('SUPABASE_SERVICE_ROLE_KEY') || process.env.SUPABASE_SERVICE_KEY || '',
 
     // JWT
     jwtSecret: getEnvVarOptional('JWT_SECRET', 'development-secret-key'),

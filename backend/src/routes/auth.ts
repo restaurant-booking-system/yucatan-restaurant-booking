@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { env } from '../config/env.js';
 import crypto from 'crypto';
 
@@ -47,7 +47,7 @@ router.post('/register-restaurant', async (req: Request, res: Response) => {
         const hashedPassword = await bcrypt.hash(password, salt);
 
         // Create restaurant first
-        const { data: newRestaurant, error: restaurantError } = await supabase
+        const { data: newRestaurant, error: restaurantError } = await supabaseAdmin
             .from('restaurants')
             .insert({
                 name: restaurant.name,
@@ -79,7 +79,7 @@ router.post('/register-restaurant', async (req: Request, res: Response) => {
         }
 
         // Create restaurant user/owner
-        const { data: newUser, error: userError } = await supabase
+        const { data: newUser, error: userError } = await supabaseAdmin
             .from('restaurant_users')
             .insert({
                 restaurant_id: newRestaurant.id,
@@ -181,7 +181,7 @@ router.post('/customer/register', async (req: Request, res: Response) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
-        const { data: newUser, error: userError } = await supabase
+        const { data: newUser, error: userError } = await supabaseAdmin
             .from('users')
             .insert({
                 id: crypto.randomUUID(), // Using a random UUID since we're not using Supabase Auth yet
@@ -307,7 +307,7 @@ router.post('/restaurant/register', async (req: Request, res: Response) => {
         const passwordHash = await bcrypt.hash(password, salt);
 
         // 1. Create User
-        const { data: newUser, error: userError } = await supabase
+        const { data: newUser, error: userError } = await supabaseAdmin
             .from('users')
             .insert({
                 id: userId,
@@ -324,7 +324,7 @@ router.post('/restaurant/register', async (req: Request, res: Response) => {
         if (userError) throw userError;
 
         // 2. Create Restaurant
-        const { data: restaurant, error: restError } = await supabase
+        const { data: restaurant, error: restError } = await supabaseAdmin
             .from('restaurants')
             .insert({
                 id: crypto.randomUUID(),

@@ -111,43 +111,49 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 // START SERVER
 // ===========================================
 
-const server = app.listen(env.port, () => {
-    console.log('');
-    console.log('🍽️  ════════════════════════════════════════════');
-    console.log('');
-    console.log('   MESA FELIZ API');
-    console.log('   Restaurant Reservation System');
-    console.log('');
-    console.log(`   🚀 Server running on port ${env.port}`);
-    console.log(`   📍 http://localhost:${env.port}`);
-    console.log(`   🌍 Environment: ${env.nodeEnv}`);
-    console.log('');
-    console.log('   Available endpoints:');
-    console.log('   • GET  /health');
-    console.log('   • GET  /api/restaurants');
-    console.log('   • GET  /api/restaurants/:id');
-    console.log('   • POST /api/reservations');
-    console.log('   • GET  /api/reservations/my');
-    console.log('');
-    console.log('═════════════════════════════════════════════════');
-    console.log('');
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully...');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+// Only start server if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+    const server = app.listen(env.port, () => {
+        console.log('');
+        console.log('🍽️  ════════════════════════════════════════════');
+        console.log('');
+        console.log('   MESA FELIZ API');
+        console.log('   Restaurant Reservation System');
+        console.log('');
+        console.log(`   🚀 Server running on port ${env.port}`);
+        console.log(`   📍 http://localhost:${env.port}`);
+        console.log(`   🌍 Environment: ${env.nodeEnv}`);
+        const key = env.supabaseServiceRoleKey;
+        console.log(`   🔑 Service Role Key (starts with): ${key ? key.substring(0, 10) + '...' : 'MISSING'}`);
+        console.log(`   🔑 Service Role Key (length): ${key ? key.length : 0}`);
+        console.log('');
+        console.log('   Available endpoints:');
+        console.log('   • GET  /health');
+        console.log('   • GET  /api/restaurants');
+        console.log('   • GET  /api/restaurants/:id');
+        console.log('   • POST /api/reservations');
+        console.log('   • GET  /api/reservations/my');
+        console.log('');
+        console.log('═════════════════════════════════════════════════');
+        console.log('');
     });
-});
 
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully...');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+        console.log('SIGTERM received, shutting down gracefully...');
+        server.close(() => {
+            console.log('Server closed');
+            process.exit(0);
+        });
     });
-});
+
+    process.on('SIGINT', () => {
+        console.log('SIGINT received, shutting down gracefully...');
+        server.close(() => {
+            console.log('Server closed');
+            process.exit(0);
+        });
+    });
+}
 
 export default app;
