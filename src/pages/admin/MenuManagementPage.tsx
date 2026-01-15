@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { UtensilsCrossed, Plus, Edit, Trash2, Star, Eye, EyeOff, Loader2, ExternalLink } from 'lucide-react';
+import { UtensilsCrossed, Plus, Edit, Trash2, Star, Eye, EyeOff, Loader2, ExternalLink, Upload, X, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +15,7 @@ import { useMenu, useUpdateMenuItem, useCreateMenuItem, useDeleteMenuItem } from
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 import { MenuItem } from '@/types';
 import { toast } from '@/components/ui/use-toast';
+import { API_BASE_URL } from '@/services/api';
 
 const categories = ['Entradas', 'Platillos Principales', 'Mariscos', 'Postres', 'Bebidas'];
 
@@ -33,6 +34,12 @@ const MenuManagementPage = () => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
     const [activeCategory, setActiveCategory] = useState('all');
+
+    // Image upload states
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Form states
     const [formData, setFormData] = useState<Partial<MenuItem>>({});
@@ -77,16 +84,98 @@ const MenuManagementPage = () => {
         }
     };
 
+    // Handle file selection
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                toast({ title: 'Error', description: 'La imagen no puede ser mayor a 5MB', variant: 'destructive' });
+                return;
+            }
+            setImageFile(file);
+            // Create preview
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleRemoveImage = () => {
+        setImageFile(null);
+        setImagePreview(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    // Upload image to server
+    const uploadImage = async (): Promise<string | null> => {
+        if (!imageFile) return null;
+
+        // Get token from localStorage
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        if (!token) {
+            toast({ title: 'Error', description: 'No hay sesión activa', variant: 'destructive' });
+            return null;
+        }
+
+        setIsUploading(true);
+        try {
+            const uploadFormData = new FormData();
+            uploadFormData.append('image', imageFile);
+
+            const response = await fetch(`${API_BASE_URL}/upload/menu-image`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: uploadFormData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                return result.data.url;
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast({ title: 'Error', description: 'No se pudo subir la imagen', variant: 'destructive' });
+            return null;
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
+
+        // Upload image if there's a new file
+        let imageUrl = editingItem?.image || '';
+        if (imageFile) {
+            const uploadedUrl = await uploadImage();
+            if (uploadedUrl) {
+                imageUrl = uploadedUrl;
+            } else if (!editingItem?.image) {
+                // If upload failed and no previous image, still continue without image
+                console.warn('Image upload failed, continuing without image');
+            }
+        }
+
         const data = {
             restaurantId: restaurantId!,
             name: (form.elements.namedItem('name') as HTMLInputElement).value,
             description: (form.elements.namedItem('description') as HTMLTextAreaElement).value,
             price: parseFloat((form.elements.namedItem('price') as HTMLInputElement).value),
             category: formData.category || editingItem?.category || categories[0],
-            image: (form.elements.namedItem('image') as HTMLInputElement).value,
+            image: imageUrl,
             isHighlighted: (form.elements.namedItem('isHighlighted') as any).checked,
             isAvailable: true
         };
@@ -107,10 +196,21 @@ const MenuManagementPage = () => {
                     )
                 });
             }
+            // Reset image states
+            handleRemoveImage();
             setIsDialogOpen(false);
         } catch (error) {
             toast({ title: 'Error', description: 'No se pudo guardar el platillo', variant: 'destructive' });
         }
+    };
+
+    // Reset form when dialog opens
+    const openDialog = (item: MenuItem | null) => {
+        setEditingItem(item);
+        setImageFile(null);
+        setImagePreview(item?.image || null);
+        setFormData({});
+        setIsDialogOpen(true);
     };
 
     if (isLoading) {
@@ -150,7 +250,7 @@ const MenuManagementPage = () => {
                                 Ver página pública
                             </a>
                         </Button>
-                        <Button onClick={() => { setEditingItem(null); setIsDialogOpen(true); }} className="gap-2">
+                        <Button onClick={() => openDialog(null)} className="gap-2">
                             <Plus className="w-4 h-4" />Nuevo platillo
                         </Button>
                     </div>
@@ -174,7 +274,7 @@ const MenuManagementPage = () => {
                         <p className="text-muted-foreground text-sm mb-4">
                             Agrega tu primer platillo al menú
                         </p>
-                        <Button onClick={() => { setEditingItem(null); setIsDialogOpen(true); }}>
+                        <Button onClick={() => openDialog(null)}>
                             <Plus className="w-4 h-4 mr-2" />Agregar platillo
                         </Button>
                     </div>
@@ -218,7 +318,7 @@ const MenuManagementPage = () => {
                                         <Button variant="ghost" size="icon" onClick={() => toggleVisibility(item)} title="Visibilidad">
                                             {item.isAvailable ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => { setEditingItem(item); setIsDialogOpen(true); }}>
+                                        <Button variant="ghost" size="icon" onClick={() => openDialog(item)}>
                                             <Edit className="w-4 h-4" />
                                         </Button>
                                         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(item.id)}>
@@ -265,8 +365,44 @@ const MenuManagementPage = () => {
                                     </div>
                                 </div>
                                 <div>
-                                    <Label>URL de imagen</Label>
-                                    <Input name="image" placeholder="https://..." defaultValue={editingItem?.image} />
+                                    <Label>Imagen del platillo</Label>
+                                    <div className="mt-2">
+                                        {imagePreview ? (
+                                            <div className="relative w-full h-48 rounded-lg overflow-hidden border-2 border-dashed border-primary/30">
+                                                <img
+                                                    src={imagePreview}
+                                                    alt="Preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleRemoveImage}
+                                                    className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <label
+                                                className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
+                                            >
+                                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                                    <Upload className="w-10 h-10 text-muted-foreground mb-3" />
+                                                    <p className="text-sm text-muted-foreground">
+                                                        <span className="font-semibold text-primary">Haz clic para subir</span>
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG o WEBP (máx. 5MB)</p>
+                                                </div>
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={handleFileSelect}
+                                                />
+                                            </label>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <Label>Destacar en menú</Label>
@@ -275,16 +411,16 @@ const MenuManagementPage = () => {
                             </div>
                             <DialogFooter>
                                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                                    {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                    {editingItem ? 'Guardar' : 'Crear'}
+                                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending || isUploading}>
+                                    {(createMutation.isPending || updateMutation.isPending || isUploading) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    {isUploading ? 'Subiendo...' : editingItem ? 'Guardar' : 'Crear'}
                                 </Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
                 </Dialog>
             </div>
-        </AdminLayout>
+        </AdminLayout >
     );
 };
 
