@@ -374,8 +374,16 @@ export const offerService = {
         return (json.data || []).map(transformOffer);
     },
 
-    async getByRestaurant(restaurantId: string): Promise<Offer[]> {
-        const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/offers`);
+    async getByRestaurant(_restaurantId: string): Promise<Offer[]> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/ofertas`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
         const json = await response.json();
 
         if (!json.success) {
@@ -386,23 +394,63 @@ export const offerService = {
     },
 
     async create(offer: Omit<Offer, 'id' | 'usageCount'>): Promise<Offer> {
-        const data = await apiCall<any>('/offers', {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/ofertas`, {
             method: 'POST',
-            body: JSON.stringify(offer),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                title: offer.title,
+                description: offer.description,
+                discount_type: offer.discountType,
+                discount_value: offer.discountValue || offer.discount,
+                valid_from: offer.validFrom,
+                valid_until: offer.validUntil,
+                terms_conditions: offer.conditions
+            }),
         });
-        return transformOffer(data);
+        const json = await response.json();
+        if (!json.success) throw new Error(json.error || 'Failed to create offer');
+        return transformOffer(json.data);
     },
 
     async update(offerId: string, updates: Partial<Offer>): Promise<Offer> {
-        const data = await apiCall<any>(`/offers/${offerId}`, {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/ofertas/${offerId}`, {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                title: updates.title,
+                description: updates.description,
+                is_active: updates.isActive,
+                discount_value: updates.discountValue,
+                valid_until: updates.validUntil
+            }),
         });
-        return transformOffer(data);
+        const json = await response.json();
+        if (!json.success) throw new Error(json.error || 'Failed to update offer');
+        return transformOffer(json.data);
     },
 
     async delete(offerId: string): Promise<void> {
-        await fetch(`${API_BASE_URL}/offers/${offerId}`, { method: 'DELETE' });
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        await fetch(`${API_BASE_URL}/admin/ofertas/${offerId}`, {
+            method: 'DELETE',
+            headers: {
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
     },
 
     async toggleActive(offerId: string, isActive: boolean): Promise<Offer> {
@@ -564,8 +612,46 @@ export const menuService = {
 // ============================================
 
 export const reviewService = {
-    async getByRestaurant(restaurantId: string): Promise<Review[]> {
-        const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/reviews`);
+    async getByRestaurant(_restaurantId: string): Promise<Review[]> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        // For admin, use the admin endpoint
+        if (token) {
+            const response = await fetch(`${API_BASE_URL}/admin/opiniones`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const json = await response.json();
+
+            if (!json.success) {
+                return [];
+            }
+
+            return (json.data || []).map((data: any) => ({
+                id: data.id,
+                restaurantId: data.restaurant_id,
+                userId: data.user_id,
+                rating: data.rating,
+                foodRating: data.food_rating,
+                serviceRating: data.service_rating,
+                ambianceRating: data.ambiance_rating,
+                valueRating: data.value_rating,
+                comment: data.comment,
+                photos: data.photos,
+                tags: data.tags,
+                response: data.response,
+                respondedAt: data.responded_at,
+                createdAt: data.created_at,
+                customerName: data.users?.name,
+                customerAvatar: data.users?.avatar_url,
+            }));
+        }
+
+        // For public (non-admin)
+        const response = await fetch(`${API_BASE_URL}/restaurants/${_restaurantId}/reviews`);
         const json = await response.json();
 
         if (!json.success) {
@@ -591,7 +677,7 @@ export const reviewService = {
                 id: data.users.id,
                 name: data.users.name,
                 email: '',
-                role: 'customer',
+                role: 'customer' as const,
                 reservationsCount: 0,
                 favoriteRestaurants: [],
                 createdAt: '',
@@ -610,12 +696,20 @@ export const reviewService = {
         };
     },
 
-    async respond(reviewId: string, response: string): Promise<Review> {
-        const data = await apiCall<any>(`/reviews/${reviewId}/respond`, {
+    async respond(reviewId: string, responseText: string): Promise<Review> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/opiniones/${reviewId}/respuesta`, {
             method: 'POST',
-            body: JSON.stringify({ response }),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({ response: responseText }),
         });
-        return data;
+        const json = await response.json();
+        return json.data;
     },
 };
 
@@ -624,8 +718,16 @@ export const reviewService = {
 // ============================================
 
 export const waitlistService = {
-    async getByRestaurant(restaurantId: string): Promise<WaitlistEntry[]> {
-        const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/waitlist`);
+    async getByRestaurant(_restaurantId: string): Promise<WaitlistEntry[]> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/waitlist`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
         const json = await response.json();
 
         if (!json.success) {
@@ -649,26 +751,55 @@ export const waitlistService = {
     },
 
     async add(entry: Omit<WaitlistEntry, 'id' | 'createdAt'>): Promise<WaitlistEntry> {
-        const data = await apiCall<any>('/waitlist', {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/waitlist`, {
             method: 'POST',
-            body: JSON.stringify(entry),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                name: entry.name,
+                phone: entry.phone,
+                party_size: entry.partySize,
+                notes: entry.notes
+            }),
         });
+        const json = await response.json();
         return {
-            ...data,
-            createdAt: data.created_at,
+            ...json.data,
+            createdAt: json.data.created_at,
         };
     },
 
     async updateStatus(entryId: string, status: WaitlistEntry['status']): Promise<WaitlistEntry> {
-        const data = await apiCall<any>(`/waitlist/${entryId}/status`, {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/waitlist/${entryId}/atender`, {
             method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
             body: JSON.stringify({ status }),
         });
-        return data;
+        const json = await response.json();
+        return json.data;
     },
 
     async remove(entryId: string): Promise<void> {
-        await fetch(`${API_BASE_URL}/waitlist/${entryId}`, { method: 'DELETE' });
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        await fetch(`${API_BASE_URL}/admin/waitlist/${entryId}`, {
+            method: 'DELETE',
+            headers: {
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
     },
 
     async notify(entryId: string): Promise<WaitlistEntry> {
@@ -685,36 +816,68 @@ export const waitlistService = {
 // ============================================
 
 export const dashboardService = {
-    async getMetrics(restaurantId: string): Promise<DashboardMetrics> {
+    async getMetrics(_restaurantId: string): Promise<DashboardMetrics> {
         try {
-            const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/dashboard/metrics`);
+            const session = localStorage.getItem('mesafeliz_restaurant_session');
+            const token = session ? JSON.parse(session).token : null;
+
+            const response = await fetch(`${API_BASE_URL}/admin/dashboard`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                }
+            });
             const json = await response.json();
 
             if (!json.success) {
                 return getDefaultMetrics();
             }
 
-            return json.data;
+            // Transform backend response to frontend format
+            return {
+                reservationsToday: json.data.reservas_hoy || 0,
+                reservationsChange: 0,
+                currentOccupancy: 0,
+                expectedRevenue: json.data.ingresos_anticipos || 0,
+                revenueChange: 0,
+                pendingConfirmations: json.data.reservas_pendientes || 0,
+                noShowRate: 0,
+                averageRating: json.data.calificacion_promedio || 0,
+            };
         } catch (error) {
             console.error('Error fetching dashboard metrics:', error);
             return getDefaultMetrics();
         }
     },
 
-    async getAISuggestions(restaurantId: string): Promise<AISuggestion[]> {
-        try {
-            const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/ai-suggestions`);
-            const json = await response.json();
-
-            if (!json.success) {
-                return [];
+    async getAISuggestions(_restaurantId: string): Promise<AISuggestion[]> {
+        // AI suggestions are mocked for now - will implement in Phase 4
+        return [
+            {
+                id: '1',
+                category: 'ocupacion',
+                title: 'Optimiza tus horarios pico',
+                description: 'Los viernes entre 8-9pm tienes 90% de ocupación. Considera agregar más mesas.',
+                priority: 'alta',
+                confidence: 85,
+                estimatedImpact: '+15% ocupación',
+                actionLabel: 'Ver análisis',
+                isApplied: false,
+                createdAt: new Date().toISOString(),
+            },
+            {
+                id: '2',
+                category: 'marketing',
+                title: 'Tendencia positiva',
+                description: 'Tus reservaciones aumentaron 15% respecto al mes pasado.',
+                priority: 'media',
+                confidence: 90,
+                estimatedImpact: 'Información',
+                actionLabel: 'Ver detalles',
+                isApplied: false,
+                createdAt: new Date().toISOString(),
             }
-
-            return json.data;
-        } catch (error) {
-            console.error('Error fetching AI suggestions:', error);
-            return [];
-        }
+        ];
     },
 };
 
@@ -730,6 +893,52 @@ function getDefaultMetrics(): DashboardMetrics {
         averageRating: 0,
     };
 }
+
+// ============================================
+// SETTINGS SERVICES
+// ============================================
+
+export const settingsService = {
+    async getConfiguration(): Promise<any> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/configuracion`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
+        const json = await response.json();
+
+        if (!json.success) {
+            throw new Error(json.error || 'Failed to fetch configuration');
+        }
+
+        return json.data;
+    },
+
+    async saveConfiguration(config: any): Promise<any> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/configuracion`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify(config),
+        });
+        const json = await response.json();
+
+        if (!json.success) {
+            throw new Error(json.error || 'Failed to save configuration');
+        }
+
+        return json.data;
+    },
+};
 
 // ============================================
 // AUTH SERVICES
