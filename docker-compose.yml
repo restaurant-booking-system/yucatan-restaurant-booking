@@ -12,19 +12,12 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-      # Variables de Supabase
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=${CORS_ORIGIN}
+    env_file:
+      - ./backend/.env
     networks:
       - sittara-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -46,10 +39,28 @@ services:
     networks:
       - sittara-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80" ]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # ============================================
+  # N8N AUTOMATION SERVICE
+  # ============================================
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: sittara-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=America/Mexico_City
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - sittara-network
 
 networks:
   sittara-network:
@@ -61,3 +72,4 @@ networks:
 volumes:
   backend-node-modules:
   frontend-node-modules:
+  n8n_data:

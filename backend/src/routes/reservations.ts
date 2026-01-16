@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import crypto from 'crypto';
 
@@ -61,7 +61,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         // Create reservation
         const qrCode = generateQRCode();
 
-        const { data: reservation, error } = await supabase
+        const { data: reservation, error } = await supabaseAdmin
             .from('reservations')
             .insert({
                 restaurant_id: restaurantId,
