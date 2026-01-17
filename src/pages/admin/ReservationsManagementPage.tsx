@@ -30,6 +30,14 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { cn } from '@/lib/utils';
@@ -43,7 +51,7 @@ const ReservationsManagementPage = () => {
     const { restaurant } = useRestaurantAuth();
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [dateFilter, setDateFilter] = useState('today');
+    const [dateFilter, setDateFilter] = useState('all');
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -185,81 +193,82 @@ const ReservationsManagementPage = () => {
                     <TabsContent value="list" className="space-y-4">
                         <div className="bg-card rounded-xl shadow-card overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-muted/50">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Código</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Cliente</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Hora</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Mesa</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Personas</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Estado</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Anticipo</th>
-                                            <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {filteredReservations.map((reservation, index) => (
-                                            <motion.tr
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="hover:bg-transparent">
+                                            <TableHead className="w-[100px]">Código</TableHead>
+                                            <TableHead>Cliente</TableHead>
+                                            <TableHead>Hora</TableHead>
+                                            <TableHead>Mesa</TableHead>
+                                            <TableHead>Personas</TableHead>
+                                            <TableHead>Estado</TableHead>
+                                            <TableHead>Anticipo</TableHead>
+                                            <TableHead className="text-right">Acciones</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredReservations.map((reservation) => (
+                                            <TableRow
                                                 key={reservation.id}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: index * 0.05 }}
-                                                className="hover:bg-muted/30 transition-colors"
+                                                className="group hover:bg-muted/30 transition-colors"
                                             >
-                                                <td className="px-4 py-4">
-                                                    <span className="font-mono text-xs font-medium uppercase">{reservation.id.split('-')[0]}</span>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div>
-                                                        <p className="font-medium text-sm">{reservation.customerName}</p>
-                                                        <p className="text-xs text-muted-foreground">{reservation.customerPhone || 'Sin teléfono'}</p>
+                                                <TableCell className="font-mono font-medium text-xs">
+                                                    {reservation.id.split('-')[0].toUpperCase()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium text-sm">{reservation.customerName}</span>
+                                                        <span className="text-xs text-muted-foreground">{reservation.customerPhone || 'Sin teléfono'}</span>
                                                     </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <Clock className="w-3 h-3 text-muted-foreground" />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                                                        <Clock className="w-3 h-3" />
                                                         <span>{reservation.time.substring(0, 5)}</span>
                                                     </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <Badge variant="outline" className="text-xs">
-                                                        {reservation.table?.number ? `Mesa ${reservation.table.number}` : 'Asignando...'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={reservation.table?.number ? "outline" : "secondary"} className="text-xs font-normal">
+                                                        {reservation.table?.number ? `Mesa ${reservation.table.number}` : 'Por asignar'}
                                                     </Badge>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <Users className="w-3 h-3 text-muted-foreground" />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                        <Users className="w-3 h-3" />
                                                         <span>{reservation.guestCount}</span>
                                                     </div>
-                                                </td>
-                                                <td className="px-4 py-4">
+                                                </TableCell>
+                                                <TableCell>
                                                     {getStatusBadge(reservation.status)}
-                                                </td>
-                                                <td className="px-4 py-4">
+                                                </TableCell>
+                                                <TableCell>
                                                     {reservation.depositPaid ? (
-                                                        <span className="text-success font-medium text-sm">${reservation.depositAmount}</span>
+                                                        <Badge variant="outline" className="text-success border-success/20 bg-success/5">
+                                                            ${reservation.depositAmount}
+                                                        </Badge>
                                                     ) : (
-                                                        <span className="text-muted-foreground text-sm">-</span>
+                                                        <span className="text-muted-foreground text-xs">-</span>
                                                     )}
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="flex items-center justify-end gap-1">
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1 opacity-100 group-hover:opacity-100 transition-opacity">
                                                         {reservation.status === 'pending' && (
                                                             <>
                                                                 <Button
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     variant="ghost"
-                                                                    className="text-success h-8 w-8 p-0"
+                                                                    className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
                                                                     onClick={() => handleStatusUpdate(reservation.id, 'confirmed')}
+                                                                    title="Aceptar Reserva"
                                                                 >
                                                                     <Check className="w-4 h-4" />
                                                                 </Button>
                                                                 <Button
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     variant="ghost"
-                                                                    className="text-destructive h-8 w-8 p-0"
+                                                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                                                     onClick={() => handleStatusUpdate(reservation.id, 'cancelled')}
+                                                                    title="Rechazar Reserva"
                                                                 >
                                                                     <X className="w-4 h-4" />
                                                                 </Button>
@@ -267,8 +276,8 @@ const ReservationsManagementPage = () => {
                                                         )}
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
-                                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                                                    <MoreHorizontal className="w-4 h-4" />
+                                                                <Button size="icon" variant="ghost" className="h-8 w-8">
+                                                                    <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
                                                                 </Button>
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
@@ -291,7 +300,7 @@ const ReservationsManagementPage = () => {
                                                                 <DropdownMenuSeparator />
                                                                 {reservation.status === 'confirmed' && (
                                                                     <DropdownMenuItem
-                                                                        className="gap-2 text-primary"
+                                                                        className="gap-2 text-primary focus:text-primary"
                                                                         onClick={() => handleStatusUpdate(reservation.id, 'arrived')}
                                                                     >
                                                                         <Check className="w-4 h-4" />
@@ -300,7 +309,7 @@ const ReservationsManagementPage = () => {
                                                                 )}
                                                                 {reservation.status !== 'cancelled' && (
                                                                     <DropdownMenuItem
-                                                                        className="gap-2 text-destructive"
+                                                                        className="gap-2 text-destructive focus:text-destructive"
                                                                         onClick={() => handleStatusUpdate(reservation.id, 'cancelled')}
                                                                     >
                                                                         <X className="w-4 h-4" />
@@ -310,17 +319,20 @@ const ReservationsManagementPage = () => {
                                                             </DropdownMenuContent>
                                                         </DropdownMenu>
                                                     </div>
-                                                </td>
-                                            </motion.tr>
+                                                </TableCell>
+                                            </TableRow>
                                         ))}
-                                    </tbody>
-                                </table>
+                                    </TableBody>
+                                </Table>
                             </div>
 
                             {filteredReservations.length === 0 && (
-                                <div className="text-center py-12">
-                                    <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                                    <p className="text-muted-foreground text-sm">No se encontraron reservas</p>
+                                <div className="text-center py-16 px-4">
+                                    <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Calendar className="w-8 h-8 text-muted-foreground/50" />
+                                    </div>
+                                    <h3 className="font-medium text-lg mb-1">Sin reservaciones</h3>
+                                    <p className="text-muted-foreground text-sm max-w-sm mx-auto">No se encontraron reservas con los filtros actuales.</p>
                                 </div>
                             )}
                         </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronLeft, Calendar, Users, Heart, Gift, Briefcase, PartyPopper, MessageSquare, CreditCard, Check, LogIn } from 'lucide-react';
@@ -10,10 +10,11 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import TableMap from '@/components/TableMap';
 import TimeSlotPicker from '@/components/TimeSlotPicker';
-import { useRestaurant, useAvailableTables, useTimeSlots } from '@/hooks/useData';
+import { useRestaurant, useAvailableTables, useTimeSlots, useCreateReservation } from '@/hooks/useData';
 import { Table } from '@/types';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 type ReservationStep = 'date' | 'time' | 'table' | 'details' | 'confirm';
 
@@ -42,6 +43,15 @@ const ReservationPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
 
+  // Auto-scroll to bottom when a table is selected to show the "Continue" button
+  useEffect(() => {
+    if (selectedMesa && step === 'table') {
+      setTimeout(() => {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      }, 100);
+    }
+  }, [selectedMesa, step]);
+
   // Fetch time slots for selected date
   const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : '';
   const { data: timeSlots = [] } = useTimeSlots(id || '', dateStr);
@@ -53,6 +63,9 @@ const ReservationPage = () => {
     selectedTime || '',
     guestCount
   );
+
+  // Create reservation mutation
+  const createReservation = useCreateReservation();
 
   const isLoading = authLoading || restaurantLoading;
 
@@ -135,11 +148,32 @@ const ReservationPage = () => {
   };
 
   const handleConfirm = async () => {
+    if (!user || !selectedMesa || !selectedDate || !selectedTime) {
+      toast.error('Faltan datos para completar la reserva');
+      return;
+    }
+
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsSubmitting(false);
-    setIsConfirmed(true);
+    try {
+      await createReservation.mutateAsync({
+        restaurantId: id!,
+        userId: user.id,
+        tableId: selectedMesa.id,
+        date: dateStr,
+        time: selectedTime,
+        guestCount: guestCount,
+        status: 'pending',
+        specialRequest: specialRequest || undefined,
+        occasion: selectedOccasion || undefined,
+      });
+      toast.success('¡Reserva creada exitosamente!');
+      setIsConfirmed(true);
+    } catch (error: any) {
+      console.error('Error creating reservation:', error);
+      toast.error(error.message || 'Error al crear la reserva');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const canProceed = () => {
@@ -172,11 +206,12 @@ const ReservationPage = () => {
               className="text-center"
             >
               <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-success/20 flex items-center justify-center">
-                <Check className="h-12 w-12 text-success" />
+                <Check className="h-12 w-12 text-primary" />
               </div>
-              <h1 className="font-display text-3xl font-bold mb-4">¡Reserva confirmada!</h1>
+              <h1 className="font-display text-3xl font-bold mb-4">¡Solicitud enviada!</h1>
               <p className="text-muted-foreground mb-8">
-                Tu reserva en {restaurant.name} ha sido registrada exitosamente.
+                Tu reserva ha sido registrada y está pendiente de confirmación por el restaurante.
+                Te notificaremos cuando sea aceptada.
               </p>
 
               <div className="bg-card rounded-2xl p-6 shadow-card text-left mb-8">

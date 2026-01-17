@@ -115,6 +115,40 @@ export const useUpdateTableStatus = () => {
     });
 };
 
+export const useCreateTable = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (table: Partial<Table>) => tableService.create(table),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['tables'] });
+        },
+    });
+};
+
+export const useUpdateTable = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ tableId, updates }: { tableId: string; updates: Partial<Table> }) =>
+            tableService.update(tableId, updates),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['tables'] });
+        },
+    });
+};
+
+export const useDeleteTable = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (tableId: string) => tableService.delete(tableId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['tables'] });
+        },
+    });
+};
+
 // ============================================
 // RESERVATION HOOKS
 // ============================================
@@ -217,7 +251,8 @@ export const useCreateOffer = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (offer: Omit<Offer, 'id' | 'usageCount'>) => offerService.create(offer),
+        mutationFn: ({ restaurantId, offer }: { restaurantId: string; offer: { title: string; description: string; discount: string; discountType: string; validFrom?: string; validUntil?: string } }) =>
+            offerService.create(restaurantId, offer),
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['offers'] });
             queryClient.invalidateQueries({ queryKey: ['offers', variables.restaurantId] });

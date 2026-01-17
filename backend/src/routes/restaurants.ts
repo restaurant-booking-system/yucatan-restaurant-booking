@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { supabase } from '../config/supabase.js';
-import { optionalAuthMiddleware } from '../middleware/auth.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
+import { optionalAuthMiddleware, authMiddleware } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -373,6 +373,77 @@ router.get('/:id/offers', async (req: Request, res: Response) => {
             success: false,
             error: 'Internal server error',
         });
+    }
+});
+
+/**
+ * GET /api/restaurants/:id/reservations
+ * Get reservations for a restaurant (protected)
+ */
+router.get('/:id/reservations', authMiddleware, async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { status, date } = req.query;
+
+        // Verify ownership
+        const { data: restaurant, error: rError } = await supabase
+            .from('restaurants')
+            .select('owner_id')
+            .eq('id', id)
+            .single();
+
+        if (rError || !restaurant) {
+            res.status(404).json({ success: false, error: 'Restaurant not found' });
+            return;
+        }
+
+        // Allow owner or super_admin
+        if (restaurant.owner_id !== req.user!.id && req.user!.role !== 'super_admin') {
+            // Check if user is staff (optional, depending on requirements)
+            const { data: staff } = await supabase
+                .from('restaurant_staff')
+                .select('id')
+                .eq('restaurant_id', id)
+                .eq('user_id', req.user!.id)
+                .single();
+
+            if (!staff) {
+                res.status(403).json({ success: false, error: 'Unauthorized access to restaurant reservations' });
+                return;
+            }
+        }
+
+        let query = supabaseAdmin
+            .from('reservations')
+            .select(`
+                *,
+                users (id, name, email, phone, avatar_url),
+                tables (id, number, name)
+            `)
+            .eq('restaurant_id', id)
+            .order('date', { ascending: false })
+            .order('time', { ascending: false });
+
+        if (status && status !== 'all') {
+            query = query.eq('status', status);
+        }
+
+        if (date && date !== 'all') {
+            query = query.eq('date', date);
+        }
+
+        const { data: reservations, error } = await query;
+
+        if (error) {
+            console.error('Error fetching reservations:', error);
+            res.status(500).json({ success: false, error: 'Error fetching reservations' });
+            return;
+        }
+
+        res.json({ success: true, data: reservations });
+    } catch (error) {
+        console.error('Restaurant reservations error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
 

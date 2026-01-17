@@ -1,127 +1,79 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, MapPin, Clock, Users, QrCode, Star, ExternalLink, X } from 'lucide-react';
+import { Calendar, MapPin, Clock, Users, QrCode, Star, ExternalLink, X, Loader2 } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import StatusBadge from '@/components/reservation/StatusBadge';
 import RatingModal from '@/components/rating/RatingModal';
-import { useRestaurants, useUserReservations } from '@/hooks/useData';
+import { useRestaurants, useUserReservations, useCancelReservation } from '@/hooks/useData';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from '@/components/ui/use-toast';
-
-type ReservationStatus = 'confirmed' | 'pending' | 'completed' | 'cancelled' | 'arrived' | 'no_show';
-
-interface MockReservation {
-  id: string;
-  restaurantId: string;
-  date: string;
-  time: string;
-  guests: number;
-  mesa: number;
-  status: ReservationStatus;
-  code: string;
-  occasion?: string;
-  hasReview?: boolean;
-}
-
-// Mock reservations
-const mockReservations: MockReservation[] = [
-  {
-    id: 'res-1',
-    restaurantId: '1',
-    date: '2026-01-20',
-    time: '20:00',
-    guests: 2,
-    mesa: 3,
-    status: 'confirmed',
-    code: 'RES-ABC123',
-    occasion: 'Cena romántica',
-  },
-  {
-    id: 'res-2',
-    restaurantId: '2',
-    date: '2026-01-25',
-    time: '14:00',
-    guests: 4,
-    mesa: 5,
-    status: 'pending',
-    code: 'RES-DEF456',
-  },
-];
-
-const pastReservations: MockReservation[] = [
-  {
-    id: 'res-3',
-    restaurantId: '3',
-    date: '2026-01-10',
-    time: '21:00',
-    guests: 6,
-    mesa: 7,
-    status: 'completed',
-    code: 'RES-GHI789',
-    hasReview: false,
-  },
-  {
-    id: 'res-4',
-    restaurantId: '1',
-    date: '2026-01-05',
-    time: '19:00',
-    guests: 2,
-    mesa: 2,
-    status: 'completed',
-    code: 'RES-JKL012',
-    hasReview: true,
-  },
-];
+import { toast } from 'sonner';
+import { Reservation } from '@/types';
 
 const MyReservationsPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: restaurants = [] } = useRestaurants();
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [selectedReservation, setSelectedReservation] = useState<MockReservation | null>(null);
-  const [ratingModalOpen, setRatingModalOpen] = useState(false);
-  const [ratingReservation, setRatingReservation] = useState<MockReservation | null>(null);
+  const { data: reservations = [], isLoading: reservationsLoading, refetch } = useUserReservations(user?.id);
+  const cancelReservation = useCancelReservation();
 
-  const handleCancelClick = (reservation: MockReservation) => {
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [ratingModalOpen, setRatingModalOpen] = useState(false);
+  const [ratingReservation, setRatingReservation] = useState<Reservation | null>(null);
+
+  // Split reservations into upcoming and past
+  const today = new Date().toISOString().split('T')[0];
+  const upcomingReservations = reservations.filter(r => r.date >= today && r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'no_show');
+  const pastReservations = reservations.filter(r => r.date < today || r.status === 'completed' || r.status === 'cancelled' || r.status === 'no_show');
+
+  const handleCancelClick = (reservation: Reservation) => {
     setSelectedReservation(reservation);
     setCancelDialogOpen(true);
   };
 
-  const handleConfirmCancel = () => {
-    // TODO: API call to cancel reservation
-    toast({
-      title: 'Reserva cancelada',
-      description: 'Tu reserva ha sido cancelada exitosamente.',
-    });
+  const handleQrClick = (reservation: Reservation) => {
+    setSelectedReservation(reservation);
+    setQrDialogOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!selectedReservation) return;
+
+    try {
+      await cancelReservation.mutateAsync({ reservationId: selectedReservation.id });
+      toast.success('Reserva cancelada exitosamente');
+      refetch();
+    } catch (error) {
+      toast.error('Error al cancelar la reserva');
+    }
     setCancelDialogOpen(false);
     setSelectedReservation(null);
   };
 
-  const handleRateClick = (reservation: MockReservation) => {
+  const handleRateClick = (reservation: Reservation) => {
     setRatingReservation(reservation);
     setRatingModalOpen(true);
   };
 
   const handleSubmitRating = (data: any) => {
-    // TODO: API call to submit rating
     console.log('Rating submitted:', data);
-    toast({
-      title: '¡Gracias por tu opinión!',
-      description: 'Tu calificación ha sido enviada.',
-    });
+    toast.success('¡Gracias por tu opinión!');
     setRatingModalOpen(false);
   };
 
-  const ReservationCard = ({ reservation, isPast = false }: { reservation: MockReservation, isPast?: boolean }) => {
+  const ReservationCard = ({ reservation, isPast = false }: { reservation: Reservation, isPast?: boolean }) => {
     const restaurant = restaurants.find(r => r.id === reservation.restaurantId);
     if (!restaurant) return null;
 
-    const canRate = isPast && reservation.status === 'completed' && !reservation.hasReview;
+    const canRate = isPast && reservation.status === 'completed';
 
     return (
       <motion.div
@@ -195,21 +147,21 @@ const MyReservationsPage = () => {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Código</p>
-                  <p className="font-mono text-xs font-medium">{reservation.code}</p>
+                  <p className="font-mono text-xs font-medium">{reservation.qrCode || reservation.id.slice(0, 8).toUpperCase()}</p>
                 </div>
               </div>
             </div>
 
-            {reservation.occasion && (
+            {reservation.specialRequest && (
               <p className="text-sm text-muted-foreground mb-3">
-                🎉 {reservation.occasion}
+                📝 {reservation.specialRequest}
               </p>
             )}
 
             {/* Actions */}
             {!isPast && (
               <div className="flex flex-wrap gap-3 pt-3 border-t border-border">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => handleQrClick(reservation)}>
                   <QrCode className="h-4 w-4 mr-1" />
                   Ver código QR
                 </Button>
@@ -239,7 +191,7 @@ const MyReservationsPage = () => {
                     Reservar de nuevo
                   </Button>
                 </Link>
-                {canRate ? (
+                {canRate && (
                   <Button
                     variant="default"
                     size="sm"
@@ -248,12 +200,7 @@ const MyReservationsPage = () => {
                     <Star className="h-4 w-4 mr-1" />
                     Calificar
                   </Button>
-                ) : reservation.hasReview ? (
-                  <Badge variant="secondary" className="h-8 px-3">
-                    <Star className="h-3 w-3 mr-1 fill-yellow-500 text-yellow-500" />
-                    Ya calificaste
-                  </Badge>
-                ) : null}
+                )}
               </div>
             )}
           </div>
@@ -282,8 +229,8 @@ const MyReservationsPage = () => {
               <TabsTrigger value="active" className="rounded-lg gap-2">
                 <Calendar className="h-4 w-4" />
                 Próximas
-                {mockReservations.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">{mockReservations.length}</Badge>
+                {upcomingReservations.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{upcomingReservations.length}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="history" className="rounded-lg gap-2">
@@ -293,9 +240,13 @@ const MyReservationsPage = () => {
             </TabsList>
 
             <TabsContent value="active">
-              {mockReservations.length > 0 ? (
+              {reservationsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : upcomingReservations.length > 0 ? (
                 <div className="space-y-6">
-                  {mockReservations.map((reservation) => (
+                  {upcomingReservations.map((reservation) => (
                     <ReservationCard key={reservation.id} reservation={reservation} />
                   ))}
                 </div>
@@ -320,7 +271,11 @@ const MyReservationsPage = () => {
             </TabsContent>
 
             <TabsContent value="history">
-              {pastReservations.length > 0 ? (
+              {reservationsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : pastReservations.length > 0 ? (
                 <div className="space-y-6">
                   {pastReservations.map((reservation) => (
                     <ReservationCard key={reservation.id} reservation={reservation} isPast />
@@ -346,6 +301,35 @@ const MyReservationsPage = () => {
         </div>
       </main>
 
+      {/* QR Dialog */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="sm:max-w-xs flex flex-col items-center justify-center text-center p-8">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Código de Reserva</DialogTitle>
+            <DialogDescription>Muestra este código al llegar al restaurante</DialogDescription>
+          </DialogHeader>
+          {selectedReservation && (
+            <div className="mt-4 p-4 bg-white rounded-xl shadow-inner">
+              <QRCode
+                value={selectedReservation.qrCode || selectedReservation.id}
+                size={200}
+                viewBox={`0 0 256 256`}
+              />
+            </div>
+          )}
+          {selectedReservation && (
+            <div className="mt-4">
+              <p className="font-mono text-2xl font-bold tracking-widest">
+                {selectedReservation.qrCode || selectedReservation.id.split('-')[0].toUpperCase()}
+              </p>
+              <Badge variant={selectedReservation.status === 'confirmed' ? 'success' : 'outline'} className="mt-2">
+                {selectedReservation.status === 'confirmed' ? 'Confirmada' : 'Pendiente'}
+              </Badge>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Cancel Confirmation Dialog */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -358,7 +342,7 @@ const MyReservationsPage = () => {
             </p>
             {selectedReservation && (
               <div className="mt-4 p-3 bg-muted rounded-lg text-sm">
-                <p className="font-medium">Código: {selectedReservation.code}</p>
+                <p className="font-medium">Código: {selectedReservation.qrCode || selectedReservation.id.slice(0, 8).toUpperCase()}</p>
                 <p className="text-muted-foreground">
                   {new Date(selectedReservation.date).toLocaleDateString('es-MX')} - {selectedReservation.time}
                 </p>
@@ -369,7 +353,8 @@ const MyReservationsPage = () => {
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
               No, mantener
             </Button>
-            <Button variant="destructive" onClick={handleConfirmCancel}>
+            <Button variant="destructive" onClick={handleConfirmCancel} disabled={cancelReservation.isPending}>
+              {cancelReservation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Sí, cancelar
             </Button>
           </div>

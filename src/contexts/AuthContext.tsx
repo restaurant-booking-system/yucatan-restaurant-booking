@@ -38,10 +38,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         setIsLoading(true);
         try {
-            const user = await authService.loginCustomer(email, password);
-            if (user) {
+            const result = await authService.loginCustomer(email, password);
+            if (result) {
+                const { user, token } = result;
                 setUser(user);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+                localStorage.setItem(TOKEN_KEY, token);
                 return { success: true };
             }
             return { success: false, error: 'Credenciales inválidas' };
@@ -64,8 +66,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const data = await response.json();
 
             if (data.success) {
-                setUser(data.data.user);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data.user));
+                const { user, token } = data.data;
+                setUser(user);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+                localStorage.setItem(TOKEN_KEY, token);
                 return { success: true };
             }
             return { success: false, error: data.error || 'Error al registrar' };

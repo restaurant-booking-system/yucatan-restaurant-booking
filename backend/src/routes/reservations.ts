@@ -119,7 +119,7 @@ router.get('/my', authMiddleware, async (req: Request, res: Response) => {
     try {
         const { status, upcoming } = req.query;
 
-        let query = supabase
+        let query = supabaseAdmin
             .from('reservations')
             .select(`
         *,
@@ -231,8 +231,8 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response) 
             return;
         }
 
-        // Get the reservation first
-        const { data: reservation, error: fetchError } = await supabase
+        // Get the reservation first using admin client to bypass RLS
+        const { data: reservation, error: fetchError } = await supabaseAdmin
             .from('reservations')
             .select('*, tables(id)')
             .eq('id', id)
@@ -246,8 +246,8 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response) 
             return;
         }
 
-        // Update reservation status
-        const { data: updatedReservation, error } = await supabase
+        // Update reservation status with admin privileges to ensure RLS doesn't block
+        const { data: updatedReservation, error } = await supabaseAdmin
             .from('reservations')
             .update({
                 status,
@@ -266,28 +266,35 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response) 
             return;
         }
 
-        // Update table status based on reservation status
-        let tableStatus: string;
+        // Update table status only for real-time operations (arrived/completed)
+        // We do NOT update table status for 'confirmed' because that would block the table for all future dates
+        let tableStatus: string | null = null;
         switch (status) {
-            case 'confirmed':
-                tableStatus = 'reserved';
-                break;
             case 'arrived':
                 tableStatus = 'occupied';
                 break;
             case 'completed':
             case 'cancelled':
             case 'no_show':
-                tableStatus = 'available';
+                // Only free the table if it was occupied
+                const { data: currentTable } = await supabase
+                    .from('tables')
+                    .select('status')
+                    .eq('id', reservation.table_id)
+                    .single();
+
+                if (currentTable?.status === 'occupied') {
+                    tableStatus = 'available';
+                }
                 break;
-            default:
-                tableStatus = 'pending';
         }
 
-        await supabase
-            .from('tables')
-            .update({ status: tableStatus })
-            .eq('id', reservation.table_id);
+        if (tableStatus) {
+            await supabaseAdmin
+                .from('tables')
+                .update({ status: tableStatus })
+                .eq('id', reservation.table_id);
+        }
 
         res.json({
             success: true,

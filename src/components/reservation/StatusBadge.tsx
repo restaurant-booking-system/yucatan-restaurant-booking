@@ -23,7 +23,7 @@ const statusConfig: Record<ReservationStatus, {
     className: string;
 }> = {
     pending: {
-        label: 'Pendiente',
+        label: 'Reserva Pendiente',
         icon: Clock,
         variant: 'outline',
         className: 'border-yellow-500 text-yellow-700 bg-yellow-50',

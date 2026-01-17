@@ -32,12 +32,19 @@ async function apiCall<T>(
 ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
 
+    // Get auth token from user session
+    const token = localStorage.getItem('mesafeliz_token');
+
+    // Extract headers from options to prevent overwriting
+    const { headers: customHeaders, ...restOptions } = options || {};
+
     const response = await fetch(url, {
+        ...restOptions,
         headers: {
             'Content-Type': 'application/json',
-            ...options?.headers,
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+            ...(customHeaders as Record<string, string>),
         },
-        ...options,
     });
 
     if (!response.ok) {
@@ -84,18 +91,21 @@ function transformRestaurant(data: any): Restaurant {
     };
 }
 
-function transformTable(data: any): Table {
+function transformTable(data: any): Table & { availability_status?: string; is_selectable?: boolean } {
     return {
         id: data.id,
         restaurantId: data.restaurant_id,
         number: data.number,
         capacity: data.capacity,
-        status: mapTableStatus(data.status),
+        status: mapTableStatus(data.status || data.availability_status || 'available'),
         x: data.position_x || 0,
         y: data.position_y || 0,
         shape: data.shape || 'round',
         width: data.width || 60,
         height: data.height || 60,
+        // For reservation page compatibility
+        availability_status: data.availability_status || 'available',
+        is_selectable: data.is_selectable !== undefined ? data.is_selectable : true,
     };
 }
 
@@ -254,7 +264,7 @@ export const tableService = {
     },
 
     async getAvailable(restaurantId: string, date: string, time: string, guestCount: number): Promise<Table[]> {
-        const params = new URLSearchParams({ date, time, guestCount: String(guestCount) });
+        const params = new URLSearchParams({ date, time, guests: String(guestCount) });
         const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/tables/available?${params}`);
         const json = await response.json();
 
@@ -263,6 +273,71 @@ export const tableService = {
         }
 
         return (json.data || []).map(transformTable);
+    },
+
+    // Admin Methods
+    async create(table: Partial<Table>): Promise<Table> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/mesas`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                number: table.number,
+                capacity: table.capacity,
+                shape: table.shape,
+                position_x: table.x,
+                position_y: table.y,
+                zone: 'main',
+                is_vip: false
+            }),
+        });
+        const json = await response.json();
+        if (!json.success) throw new Error(json.error || 'Failed to create table');
+        return transformTable(json.data);
+    },
+
+    async update(tableId: string, updates: Partial<Table>): Promise<Table> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const backendUpdates: any = {};
+        if (updates.number !== undefined) backendUpdates.number = updates.number;
+        if (updates.capacity !== undefined) backendUpdates.capacity = updates.capacity;
+        if (updates.shape !== undefined) backendUpdates.shape = updates.shape;
+        if (updates.x !== undefined) backendUpdates.position_x = updates.x;
+        if (updates.y !== undefined) backendUpdates.position_y = updates.y;
+        if (updates.status !== undefined) backendUpdates.status = mapFrontendStatusToBackend(updates.status);
+
+        const response = await fetch(`${API_BASE_URL}/admin/mesas/${tableId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify(backendUpdates),
+        });
+        const json = await response.json();
+        if (!json.success) throw new Error(json.error || 'Failed to update table');
+        return transformTable(json.data);
+    },
+
+    async delete(tableId: string): Promise<void> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/mesas/${tableId}`, {
+            method: 'DELETE',
+            headers: {
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
+        const json = await response.json();
+        if (!json.success) throw new Error(json.error || 'Failed to delete table');
     },
 };
 
@@ -299,18 +374,10 @@ export const reservationService = {
     },
 
     async getByUser(userId: string): Promise<Reservation[]> {
-        const response = await fetch(`${API_BASE_URL}/reservations/my`, {
-            headers: {
-                // Add auth token here when authentication is implemented
-            },
+        const data = await apiCall<any>('/reservations/my', {
+            method: 'GET',
         });
-        const json = await response.json();
-
-        if (!json.success) {
-            return [];
-        }
-
-        return (json.data || []).map(transformReservation);
+        return (data || []).map(transformReservation);
     },
 
     async getByRestaurant(restaurantId: string, filters?: ReservationFilters): Promise<Reservation[]> {
@@ -321,7 +388,16 @@ export const reservationService = {
         const queryString = params.toString();
         const endpoint = `/restaurants/${restaurantId}/reservations${queryString ? `?${queryString}` : ''}`;
 
-        const response = await fetch(`${API_BASE_URL}${endpoint}`);
+        // Get admin token
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
         const json = await response.json();
 
         if (!json.success) {
@@ -332,9 +408,19 @@ export const reservationService = {
     },
 
     async updateStatus(reservationId: string, status: Reservation['status']): Promise<Reservation> {
+        // Try admin token first
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const adminToken = session ? JSON.parse(session).token : null;
+
+        const headers: Record<string, string> = {};
+        if (adminToken) {
+            headers['Authorization'] = `Bearer ${adminToken}`;
+        }
+
         const data = await apiCall<any>(`/reservations/${reservationId}/status`, {
             method: 'PATCH',
             body: JSON.stringify({ status }),
+            headers
         });
         return transformReservation(data);
     },
@@ -374,16 +460,8 @@ export const offerService = {
         return (json.data || []).map(transformOffer);
     },
 
-    async getByRestaurant(_restaurantId: string): Promise<Offer[]> {
-        const session = localStorage.getItem('mesafeliz_restaurant_session');
-        const token = session ? JSON.parse(session).token : null;
-
-        const response = await fetch(`${API_BASE_URL}/admin/ofertas`, {
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token && { 'Authorization': `Bearer ${token}` })
-            }
-        });
+    async getByRestaurant(restaurantId: string): Promise<Offer[]> {
+        const response = await fetch(`${API_BASE_URL}/offers/restaurants/${restaurantId}`);
         const json = await response.json();
 
         if (!json.success) {
@@ -393,63 +471,62 @@ export const offerService = {
         return (json.data || []).map(transformOffer);
     },
 
-    async create(offer: Omit<Offer, 'id' | 'usageCount'>): Promise<Offer> {
+    async create(restaurantId: string, offer: { title: string; description: string; discount: string; discountType: string; validFrom?: string; validUntil?: string }): Promise<Offer> {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        const response = await fetch(`${API_BASE_URL}/admin/ofertas`, {
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const data = await apiCall<any>(`/offers/restaurants/${restaurantId}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token && { 'Authorization': `Bearer ${token}` })
-            },
             body: JSON.stringify({
                 title: offer.title,
                 description: offer.description,
-                discount_type: offer.discountType,
-                discount_value: offer.discountValue || offer.discount,
-                valid_from: offer.validFrom,
-                valid_until: offer.validUntil,
-                terms_conditions: offer.conditions
+                discount: offer.discount,
+                discountType: offer.discountType,
+                validFrom: offer.validFrom || null,
+                validUntil: offer.validUntil || null,
             }),
+            headers,
         });
-        const json = await response.json();
-        if (!json.success) throw new Error(json.error || 'Failed to create offer');
-        return transformOffer(json.data);
+        return transformOffer(data);
     },
 
-    async update(offerId: string, updates: Partial<Offer>): Promise<Offer> {
+    async update(offerId: string, updates: Partial<{ title?: string; description?: string; discount?: string; discountType?: string; validFrom?: string; validUntil?: string; isActive?: boolean }>): Promise<Offer> {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        const response = await fetch(`${API_BASE_URL}/admin/ofertas/${offerId}`, {
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const data = await apiCall<any>(`/offers/${offerId}`, {
             method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token && { 'Authorization': `Bearer ${token}` })
-            },
             body: JSON.stringify({
-                title: updates.title,
-                description: updates.description,
+                ...updates,
                 is_active: updates.isActive,
-                discount_value: updates.discountValue,
-                valid_until: updates.validUntil
             }),
+            headers,
         });
-        const json = await response.json();
-        if (!json.success) throw new Error(json.error || 'Failed to update offer');
-        return transformOffer(json.data);
+        return transformOffer(data);
     },
 
     async delete(offerId: string): Promise<void> {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        await fetch(`${API_BASE_URL}/admin/ofertas/${offerId}`, {
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        await apiCall<void>(`/offers/${offerId}`, {
             method: 'DELETE',
-            headers: {
-                ...(token && { 'Authorization': `Bearer ${token}` })
-            }
+            headers,
         });
     },
 
@@ -956,14 +1033,14 @@ export const authService = {
         return result.data;
     },
 
-    async loginCustomer(email: string, password: string): Promise<User | null> {
+    async loginCustomer(email: string, password: string): Promise<{ user: User; token: string } | null> {
         try {
             const response = await fetch(`${API_BASE_URL}/auth/customer/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
-            const data: ApiResponse<User> = await response.json();
+            const data: ApiResponse<{ user: User; token: string }> = await response.json();
             return data.success ? data.data : null;
         } catch (error) {
             console.error('Login error:', error);

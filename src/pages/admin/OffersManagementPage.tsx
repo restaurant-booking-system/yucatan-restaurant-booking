@@ -7,25 +7,122 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle
+} from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { useRestaurantOffers, useUpdateOffer, useDeleteOffer } from '@/hooks/useData';
+import { useRestaurantOffers, useCreateOffer, useUpdateOffer, useDeleteOffer } from '@/hooks/useData';
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 import { Offer } from '@/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const OffersManagementPage = () => {
     const { restaurant } = useRestaurantAuth();
     const restaurantId = restaurant?.id;
 
-    const { data: offers = [], isLoading, error } = useRestaurantOffers(restaurantId);
+    const { data: offers = [], isLoading, error, refetch } = useRestaurantOffers(restaurantId);
+    const createOfferMutation = useCreateOffer();
     const updateOfferMutation = useUpdateOffer();
     const deleteOfferMutation = useDeleteOffer();
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [editingOffer, setEditingOffer] = useState<Offer | null>(null);
+
+    // Form state
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [discount, setDiscount] = useState('');
+    const [discountType, setDiscountType] = useState('percentage');
+    const [validFrom, setValidFrom] = useState('');
+    const [validUntil, setValidUntil] = useState('');
+
+    const resetForm = () => {
+        setTitle('');
+        setDescription('');
+        setDiscount('');
+        setDiscountType('percentage');
+        setValidFrom('');
+        setValidUntil('');
+    };
+
+    const handleOpenCreate = () => {
+        resetForm();
+        setEditingOffer(null);
+        setIsCreateOpen(true);
+    };
+
+    const handleOpenEdit = (offer: Offer) => {
+        setTitle(offer.title);
+        setDescription(offer.description);
+        setDiscount(offer.discount);
+        setDiscountType(offer.discountType || 'percentage');
+        setValidFrom(offer.validFrom || '');
+        setValidUntil(offer.validUntil || '');
+        setEditingOffer(offer);
+        setIsCreateOpen(false);
+    };
+
+    const handleClose = () => {
+        setIsCreateOpen(false);
+        setEditingOffer(null);
+        resetForm();
+    };
+
+    const handleSubmit = async () => {
+        if (!title || !description || !discount) {
+            toast.error('Por favor completa todos los campos requeridos');
+            return;
+        }
+
+        if (!restaurantId) {
+            toast.error('No se encontró el ID del restaurante. Por favor, cierra sesión y vuelve a iniciar.');
+            console.error('restaurantId is undefined. Restaurant data:', restaurant);
+            return;
+        }
+
+        try {
+            if (editingOffer) {
+                await updateOfferMutation.mutateAsync({
+                    offerId: editingOffer.id,
+                    updates: {
+                        title,
+                        description,
+                        discount,
+                        discountType,
+                        validFrom: validFrom || undefined,
+                        validUntil: validUntil || undefined,
+                    }
+                });
+                toast.success('Oferta actualizada exitosamente');
+            } else {
+                await createOfferMutation.mutateAsync({
+                    restaurantId,
+                    offer: {
+                        title,
+                        description,
+                        discount,
+                        discountType,
+                        validFrom: validFrom || undefined,
+                        validUntil: validUntil || undefined,
+                    }
+                });
+                toast.success('Oferta creada exitosamente');
+            }
+            handleClose();
+            refetch();
+        } catch (err) {
+            toast.error(editingOffer ? 'Error al actualizar la oferta' : 'Error al crear la oferta');
+            console.error('Error submitting offer:', err);
+        }
+    };
 
     const toggleActive = async (id: string, currentStatus: boolean) => {
         try {
@@ -33,7 +130,10 @@ const OffersManagementPage = () => {
                 offerId: id,
                 updates: { isActive: !currentStatus }
             });
+            toast.success('Estado actualizado');
+            refetch();
         } catch (err) {
+            toast.error('Error al actualizar estado');
             console.error('Error toggling status:', err);
         }
     };
@@ -42,7 +142,10 @@ const OffersManagementPage = () => {
         if (confirm('¿Estás seguro de que deseas eliminar esta oferta?')) {
             try {
                 await deleteOfferMutation.mutateAsync(id);
+                toast.success('Oferta eliminada exitosamente');
+                refetch();
             } catch (err) {
+                toast.error('Error al eliminar la oferta');
                 console.error('Error deleting offer:', err);
             }
         }
@@ -69,7 +172,7 @@ const OffersManagementPage = () => {
                         <h1 className="text-3xl font-display font-bold">Gestión de Ofertas</h1>
                         <p className="text-muted-foreground">{activeCount} ofertas activas</p>
                     </div>
-                    <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
+                    <Button onClick={handleOpenCreate} className="gap-2">
                         <Plus className="w-4 h-4" />Nueva oferta
                     </Button>
                 </div>
@@ -97,7 +200,7 @@ const OffersManagementPage = () => {
                         <Tag className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-20" />
                         <h3 className="text-lg font-semibold">No tienes ofertas creadas</h3>
                         <p className="text-muted-foreground mb-6">Crea promociones para atraer más clientes a tu restaurante.</p>
-                        <Button onClick={() => setIsCreateOpen(true)}>Crear mi primera oferta</Button>
+                        <Button onClick={handleOpenCreate}>Crear mi primera oferta</Button>
                     </div>
                 ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -134,7 +237,7 @@ const OffersManagementPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingOffer(offer)}>
+                                    <Button variant="outline" size="sm" className="flex-1" onClick={() => handleOpenEdit(offer)}>
                                         <Edit className="w-4 h-4 mr-1" />Editar
                                     </Button>
                                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteOffer(offer.id)}>
@@ -146,25 +249,107 @@ const OffersManagementPage = () => {
                     </div>
                 )}
 
-                <Dialog open={isCreateOpen || !!editingOffer} onOpenChange={(open) => { if (!open) { setIsCreateOpen(false); setEditingOffer(null); } }}>
-                    <DialogContent>
-                        <DialogHeader><DialogTitle>{editingOffer ? 'Editar oferta' : 'Nueva oferta'}</DialogTitle></DialogHeader>
-                        <div className="space-y-4">
-                            <div><Label>Título</Label><Input placeholder="2x1 en bebidas" defaultValue={editingOffer?.title} /></div>
-                            <div><Label>Descripción</Label><Textarea placeholder="Descripción de la oferta" defaultValue={editingOffer?.description} /></div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><Label>Tipo</Label><Select defaultValue={editingOffer?.discountType || 'percentage'}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">Porcentaje</SelectItem><SelectItem value="fixed">Monto fijo</SelectItem><SelectItem value="bogo">2x1</SelectItem></SelectContent></Select></div>
-                                <div><Label>Descuento (Texto)</Label><Input placeholder="20% o 2x1" defaultValue={editingOffer?.discount} /></div>
+                <Dialog open={isCreateOpen || !!editingOffer} onOpenChange={(open) => { if (!open) handleClose(); }}>
+                    <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden">
+                        {/* Gradient Header */}
+                        <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-white">
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl font-display font-bold mb-1">
+                                    {editingOffer ? '✏️ Editar oferta' : '✨ Nueva oferta'}
+                                </DialogTitle>
+                                <DialogDescription className="text-sm text-white/80">
+                                    Crea promociones irresistibles para tus clientes
+                                </DialogDescription>
+                            </DialogHeader>
+                        </div>
+
+                        <div className="p-6 space-y-5">
+                            {/* Title Input */}
+                            <div className="relative">
+                                <Label className="text-sm font-medium mb-2 block">Título de la oferta</Label>
+                                <Input
+                                    placeholder="Ej: 2x1 en bebidas"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="h-11 border-2 focus:border-primary transition-colors"
+                                />
                             </div>
+
+                            {/* Description Textarea */}
+                            <div className="relative">
+                                <Label className="text-sm font-medium mb-2 block">Descripción</Label>
+                                <Textarea
+                                    placeholder="Describe los detalles de tu promoción..."
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="min-h-[100px] border-2 focus:border-primary transition-colors resize-none"
+                                    rows={4}
+                                />
+                            </div>
+                            {/* Type and Discount Grid */}
                             <div className="grid grid-cols-2 gap-4">
-                                <div><Label>Fecha inicio</Label><Input type="date" defaultValue={editingOffer?.validFrom} /></div>
-                                <div><Label>Fecha fin</Label><Input type="date" defaultValue={editingOffer?.validUntil} /></div>
+                                <div>
+                                    <Label className="text-sm font-medium mb-2 block">Tipo de descuento</Label>
+                                    <Select value={discountType} onValueChange={setDiscountType}>
+                                        <SelectTrigger className="h-11 border-2"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="percentage">💯 Porcentaje</SelectItem>
+                                            <SelectItem value="fixed">💵 Monto fijo</SelectItem>
+                                            <SelectItem value="2x1">🎁 2x1</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-sm font-medium mb-2 block">Valor</Label>
+                                    <Input
+                                        placeholder="20% o $100"
+                                        value={discount}
+                                        onChange={(e) => setDiscount(e.target.value)}
+                                        className="h-11 border-2 focus:border-primary transition-colors"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Date Range */}
+                            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                                <p className="text-sm font-medium text-muted-foreground">📅 Vigencia (Opcional)</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-xs mb-1 block">Desde</Label>
+                                        <Input
+                                            type="date"
+                                            value={validFrom}
+                                            onChange={(e) => setValidFrom(e.target.value)}
+                                            className="h-10 border-2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs mb-1 block">Hasta</Label>
+                                        <Input
+                                            type="date"
+                                            value={validUntil}
+                                            onChange={(e) => setValidUntil(e.target.value)}
+                                            className="h-10 border-2"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => { setIsCreateOpen(false); setEditingOffer(null); }}>Cancelar</Button>
-                            <Button>{editingOffer ? 'Guardar cambios' : 'Crear oferta'}</Button>
-                        </DialogFooter>
+
+                        {/* Footer Actions */}
+                        <div className="bg-muted/20 px-6 py-4 flex justify-end gap-3">
+                            <Button variant="outline" onClick={handleClose} className="min-w-[100px]">
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={createOfferMutation.isPending || updateOfferMutation.isPending}
+                                className="min-w-[140px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                            >
+                                {(createOfferMutation.isPending || updateOfferMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                {editingOffer ? '💾 Guardar' : '✨ Crear oferta'}
+                            </Button>
+                        </div>
                     </DialogContent>
                 </Dialog>
             </div>

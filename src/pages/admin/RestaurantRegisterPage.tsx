@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Store, Mail, Lock, Phone, MapPin, User,
     ChevronRight, Eye, EyeOff, Check, Utensils,
-    Clock, Image, FileText
+    Clock, Image, FileText, Loader2, CheckCircle2, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,9 +17,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { authService } from '@/services/api';
+import { toast } from 'sonner';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
 
 const zones = ['Centro', 'Montejo', 'Norte', 'Oriente', 'Poniente'];
 const cuisines = ['Yucateca', 'Mariscos', 'Fusión', 'Internacional', 'Italiana', 'Mexicana', 'Japonesa', 'Otro'];
@@ -38,6 +49,16 @@ const RestaurantRegisterPage = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Email verification state
+    const [emailVerified, setEmailVerified] = useState(false);
+    const [showVerifyModal, setShowVerifyModal] = useState(false);
+    const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
+    const [isSendingCode, setIsSendingCode] = useState(false);
+    const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+    const [verifyError, setVerifyError] = useState('');
+    const [codeSent, setCodeSent] = useState(false);
+    const [devCode, setDevCode] = useState<string | null>(null); // For development mode
+
     // Form data
     const [formData, setFormData] = useState({
         // Account
@@ -53,6 +74,8 @@ const RestaurantRegisterPage = () => {
         zone: '',
         cuisine: '',
         priceRange: '',
+        latitude: 0,
+        longitude: 0,
         // Details
         openTime: '09:00',
         closeTime: '22:00',
@@ -69,6 +92,116 @@ const RestaurantRegisterPage = () => {
         }
     };
 
+    // Email verification functions
+    const handleSendVerificationCode = async () => {
+        if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            setErrors(prev => ({ ...prev, email: 'Ingresa un correo válido' }));
+            return;
+        }
+
+        setIsSendingCode(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/verification/send-code`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: formData.email })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                setCodeSent(true);
+                setShowVerifyModal(true);
+                setVerifyError('');
+                toast.success('Código enviado a tu correo');
+                // In development, store the code to show in modal
+                if (data.devCode) {
+                    setDevCode(data.devCode);
+                    console.log('📧 Dev verification code:', data.devCode);
+                }
+            } else {
+                toast.error(data.error || 'Error al enviar código');
+            }
+        } catch (error) {
+            console.error('Error sending verification code:', error);
+            toast.error('Error al enviar el código');
+        } finally {
+            setIsSendingCode(false);
+        }
+    };
+
+    const handleVerifyCode = async () => {
+        const code = verificationCode.join('');
+        if (code.length !== 6) {
+            setVerifyError('Ingresa el código completo');
+            return;
+        }
+
+        setIsVerifyingCode(true);
+        setVerifyError('');
+        try {
+            const response = await fetch(`${API_BASE_URL}/verification/verify-code`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: formData.email, code })
+            });
+            const data = await response.json();
+
+            if (data.success && data.verified) {
+                setEmailVerified(true);
+                setShowVerifyModal(false);
+                toast.success('¡Correo verificado exitosamente!');
+            } else {
+                setVerifyError(data.error || 'Código incorrecto');
+            }
+        } catch (error) {
+            console.error('Error verifying code:', error);
+            setVerifyError('Error al verificar el código');
+        } finally {
+            setIsVerifyingCode(false);
+        }
+    };
+
+    const handleCodeInput = (index: number, value: string) => {
+        if (value.length > 1) value = value.slice(-1);
+        if (!/^\d*$/.test(value)) return;
+
+        const newCode = [...verificationCode];
+        newCode[index] = value;
+        setVerificationCode(newCode);
+
+        // Auto-focus next input
+        if (value && index < 5) {
+            const nextInput = document.getElementById(`code-${index + 1}`);
+            nextInput?.focus();
+        }
+    };
+
+    const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+        if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
+            const prevInput = document.getElementById(`code-${index - 1}`);
+            prevInput?.focus();
+        }
+    };
+
+    const handleResendCode = async () => {
+        setVerificationCode(['', '', '', '', '', '']);
+        setVerifyError('');
+        await handleSendVerificationCode();
+    };
+
+    // Address change handler
+    const handleAddressChange = (address: string, details?: { lat: number; lon: number; zone?: string }) => {
+        updateField('address', address);
+        if (details) {
+            setFormData(prev => ({
+                ...prev,
+                latitude: details.lat,
+                longitude: details.lon,
+                zone: details.zone || prev.zone
+            }));
+        }
+    };
+
     const validateStep = () => {
         const newErrors: Record<string, string> = {};
 
@@ -78,6 +211,7 @@ const RestaurantRegisterPage = () => {
             else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
                 newErrors.email = 'Correo inválido';
             }
+            // Note: email verification is handled in handleNext, not here
             if (!formData.phone.trim()) newErrors.phone = 'El teléfono es requerido';
             if (!formData.password) newErrors.password = 'La contraseña es requerida';
             else if (formData.password.length < 6) {
@@ -104,8 +238,14 @@ const RestaurantRegisterPage = () => {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (!validateStep()) return;
+
+        // If on step 1 and email not verified, trigger verification
+        if (step === 'account' && !emailVerified) {
+            await handleSendVerificationCode();
+            return; // Don't advance, wait for verification
+        }
 
         const steps: RegistrationStep[] = ['account', 'restaurant', 'details', 'confirm'];
         const currentIndex = steps.indexOf(step);
@@ -127,7 +267,6 @@ const RestaurantRegisterPage = () => {
         setErrors({});
 
         try {
-            // TODO: Implement actual API call to register restaurant
             const result = await authService.registerRestaurant({
                 owner_name: formData.ownerName,
                 email: formData.email,
@@ -256,20 +395,41 @@ const RestaurantRegisterPage = () => {
                                     {errors.ownerName && <p className="text-xs text-destructive">{errors.ownerName}</p>}
                                 </div>
 
+                                {/* Email with verification */}
                                 <div className="space-y-2">
                                     <Label htmlFor="email" className="flex items-center gap-2">
                                         <Mail className="w-4 h-4 text-muted-foreground" />
                                         Correo electrónico
                                     </Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        placeholder="correo@ejemplo.com"
-                                        value={formData.email}
-                                        onChange={(e) => updateField('email', e.target.value)}
-                                        className={errors.email ? 'border-destructive' : ''}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            placeholder="correo@ejemplo.com"
+                                            value={formData.email}
+                                            onChange={(e) => {
+                                                updateField('email', e.target.value);
+                                                if (emailVerified) setEmailVerified(false);
+                                            }}
+                                            disabled={emailVerified}
+                                            className={`${errors.email ? 'border-destructive' : ''} ${emailVerified ? 'pr-10 bg-green-50 border-green-500' : ''}`}
+                                        />
+                                        {emailVerified && (
+                                            <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-600" />
+                                        )}
+                                    </div>
                                     {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+                                    {emailVerified && (
+                                        <p className="text-xs text-green-600 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            Correo verificado correctamente
+                                        </p>
+                                    )}
+                                    {!emailVerified && !errors.email && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Se verificará al dar clic en "Continuar"
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -359,19 +519,22 @@ const RestaurantRegisterPage = () => {
                                     />
                                 </div>
 
+                                {/* Address with autocomplete */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="address" className="flex items-center gap-2">
+                                    <Label className="flex items-center gap-2">
                                         <MapPin className="w-4 h-4 text-muted-foreground" />
                                         Dirección
                                     </Label>
-                                    <Input
-                                        id="address"
-                                        placeholder="Calle, número, colonia"
+                                    <AddressAutocomplete
                                         value={formData.address}
-                                        onChange={(e) => updateField('address', e.target.value)}
-                                        className={errors.address ? 'border-destructive' : ''}
+                                        onChange={handleAddressChange}
+                                        placeholder="Busca la dirección de tu restaurante..."
+                                        error={!!errors.address}
                                     />
                                     {errors.address && <p className="text-xs text-destructive">{errors.address}</p>}
+                                    <p className="text-xs text-muted-foreground">
+                                        Escribe para buscar con OpenStreetMap
+                                    </p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -498,7 +661,10 @@ const RestaurantRegisterPage = () => {
                                         <span className="text-muted-foreground">Nombre:</span>
                                         <span>{formData.ownerName}</span>
                                         <span className="text-muted-foreground">Email:</span>
-                                        <span>{formData.email}</span>
+                                        <span className="flex items-center gap-1">
+                                            {formData.email}
+                                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                        </span>
                                         <span className="text-muted-foreground">Teléfono:</span>
                                         <span>{formData.phone}</span>
                                     </div>
@@ -513,7 +679,7 @@ const RestaurantRegisterPage = () => {
                                         <span className="text-muted-foreground">Nombre:</span>
                                         <span>{formData.restaurantName}</span>
                                         <span className="text-muted-foreground">Dirección:</span>
-                                        <span>{formData.address}</span>
+                                        <span className="line-clamp-1">{formData.address}</span>
                                         <span className="text-muted-foreground">Zona:</span>
                                         <span>{formData.zone}</span>
                                         <span className="text-muted-foreground">Cocina:</span>
@@ -588,6 +754,74 @@ const RestaurantRegisterPage = () => {
             </main>
 
             <Footer />
+
+            {/* Email Verification Modal */}
+            <Dialog open={showVerifyModal} onOpenChange={setShowVerifyModal}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-center">Verifica tu correo</DialogTitle>
+                        <DialogDescription className="text-center">
+                            Enviamos un código de 6 dígitos a<br />
+                            <strong>{formData.email}</strong>
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 py-4">
+                        {/* 6-digit code input */}
+                        <div className="flex justify-center gap-2">
+                            {verificationCode.map((digit, index) => (
+                                <Input
+                                    key={index}
+                                    id={`code-${index}`}
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={1}
+                                    value={digit}
+                                    onChange={(e) => handleCodeInput(index, e.target.value)}
+                                    onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                                    className="w-12 h-14 text-center text-2xl font-bold"
+                                />
+                            ))}
+                        </div>
+
+                        {/* Development mode: Show the code */}
+                        {devCode && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                                <p className="text-xs text-amber-600 mb-1">🔧 Modo desarrollo - Código:</p>
+                                <p className="text-2xl font-bold text-amber-800 tracking-widest">{devCode}</p>
+                            </div>
+                        )}
+
+                        {verifyError && (
+                            <p className="text-sm text-destructive text-center">{verifyError}</p>
+                        )}
+
+                        <Button
+                            onClick={handleVerifyCode}
+                            disabled={isVerifyingCode || verificationCode.join('').length !== 6}
+                            className="w-full"
+                        >
+                            {isVerifyingCode ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                                <Check className="w-4 h-4 mr-2" />
+                            )}
+                            Verificar código
+                        </Button>
+
+                        <div className="text-center">
+                            <Button
+                                variant="link"
+                                onClick={handleResendCode}
+                                disabled={isSendingCode}
+                                className="text-sm"
+                            >
+                                ¿No recibiste el código? Reenviar
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
