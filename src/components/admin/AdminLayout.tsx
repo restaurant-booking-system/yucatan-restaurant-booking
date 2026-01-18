@@ -40,12 +40,6 @@ const menuItems = [
     { icon: Settings, label: 'Configuración', path: '/admin/configuracion' },
 ];
 
-const mockNotifications = [
-    { id: 1, title: 'Nueva reserva', message: 'María García para las 20:00', time: '5 min' },
-    { id: 2, title: 'Confirmación pendiente', message: 'Mesa 5 sin confirmar', time: '15 min' },
-    { id: 3, title: 'Cliente llegó', message: 'Reserva #1234 - Mesa 3', time: '30 min' },
-];
-
 const AdminLayout = ({ children }: AdminLayoutProps) => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -271,29 +265,20 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                                 <HelpCircle className="w-5 h-5" />
                             </Button>
 
-                            {/* Notifications */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="relative">
                                         <Bell className="w-5 h-5" />
-                                        <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-80">
                                     <div className="p-2 border-b">
                                         <h3 className="font-semibold">Notificaciones</h3>
                                     </div>
-                                    {mockNotifications.map((notif) => (
-                                        <DropdownMenuItem key={notif.id} className="flex-col items-start p-3">
-                                            <span className="font-medium">{notif.title}</span>
-                                            <span className="text-sm text-muted-foreground">{notif.message}</span>
-                                            <span className="text-xs text-muted-foreground mt-1">{notif.time}</span>
-                                        </DropdownMenuItem>
-                                    ))}
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="justify-center text-primary">
-                                        Ver todas las notificaciones
-                                    </DropdownMenuItem>
+                                    <div className="p-8 text-center text-muted-foreground">
+                                        <Bell className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                        <p className="text-sm">No hay notificaciones</p>
+                                    </div>
                                 </DropdownMenuContent>
                             </DropdownMenu>
 

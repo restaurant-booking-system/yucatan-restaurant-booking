@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   User, Mail, Phone, MapPin, Bell, Heart, Star,
-  ChevronRight, Settings, LogOut, Camera, Shield,
-  Calendar, Award, Edit2, Check, X
+  ChevronRight, Settings, LogOut, Camera, Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,32 +21,6 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { User as UserType } from '@/types';
 
-// Mock user data
-const mockUser = {
-  id: 'user-1',
-  name: 'María García',
-  email: 'maria.garcia@email.com',
-  phone: '+52 999 123 4567',
-  avatar: '',
-  memberSince: '2023-06-15',
-  totalReservations: 24,
-  favoriteRestaurants: ['1', '3'],
-  preferredZone: 'Centro',
-  preferredCuisine: 'Yucateca',
-  notifications: {
-    email: true,
-    push: true,
-    sms: false,
-    marketing: true,
-  },
-};
-
-const achievements = [
-  { id: 1, name: 'Primera Reserva', icon: Calendar, earned: true },
-  { id: 2, name: 'Foodie Experto', icon: Award, earned: true },
-  { id: 3, name: '10 Restaurantes', icon: Star, earned: true },
-  { id: 4, name: 'VIP', icon: Shield, earned: false },
-];
 
 const ClientProfilePage = () => {
   const navigate = useNavigate();
@@ -254,28 +227,6 @@ const ClientProfilePage = () => {
                         className="bg-background"
                       />
                     </div>
-                  </div>
-                </div>
-
-                {/* Achievements */}
-                <div className="bg-card rounded-2xl p-6 shadow-card space-y-6">
-                  <h3 className="text-xl font-display font-semibold">Logros</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {achievements.map((achievement) => (
-                      <div
-                        key={achievement.id}
-                        className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${achievement.earned
-                          ? 'border-primary bg-primary/5'
-                          : 'border-muted opacity-50'
-                          }`}
-                      >
-                        <achievement.icon className={`w-8 h-8 mb-2 ${achievement.earned ? 'text-primary' : 'text-muted-foreground'
-                          }`} />
-                        <span className="text-sm font-medium text-center">
-                          {achievement.name}
-                        </span>
-                      </div>
-                    ))}
                   </div>
                 </div>
               </motion.div>
