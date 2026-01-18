@@ -32,8 +32,24 @@ async function apiCall<T>(
 ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
 
-    // Get auth token from user session
-    const token = localStorage.getItem('mesafeliz_token');
+    // Get auth token - try restaurant session first, then user session
+    let token = null;
+
+    // Check for restaurant session (for admin/restaurant operations)
+    const restaurantSession = localStorage.getItem('mesafeliz_restaurant_session');
+    if (restaurantSession) {
+        try {
+            const session = JSON.parse(restaurantSession);
+            token = session.token;
+        } catch (e) {
+            console.error('Error parsing restaurant session:', e);
+        }
+    }
+
+    // Fallback to user token if no restaurant session
+    if (!token) {
+        token = localStorage.getItem('mesafeliz_token');
+    }
 
     // Extract headers from options to prevent overwriting
     const { headers: customHeaders, ...restOptions } = options || {};
