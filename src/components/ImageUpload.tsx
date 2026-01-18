@@ -57,7 +57,23 @@ export const ImageUpload = ({
         // Upload to server
         setIsUploading(true);
         try {
-            const token = localStorage.getItem('auth_token');
+            // Get token from restaurant session
+            const sessionData = localStorage.getItem('mesafeliz_restaurant_session');
+            let token = null;
+
+            if (sessionData) {
+                try {
+                    const session = JSON.parse(sessionData);
+                    token = session.token;
+                } catch (e) {
+                    console.error('Error parsing session:', e);
+                }
+            }
+
+            if (!token) {
+                throw new Error('No se encontró token de autenticación. Por favor inicia sesión de nuevo.');
+            }
+
             const formData = new FormData();
             formData.append('image', file);
 
