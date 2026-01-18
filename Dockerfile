@@ -13,11 +13,8 @@ COPY package*.json ./
 # Instalar dependencias
 RUN npm install
 
-# Recibir build args
-ARG VITE_API_URL=http://localhost:3001/api
-
-# Crear .env para el build
-RUN echo "VITE_API_URL=${VITE_API_URL}" > .env
+# Copiar .env primero (con las URLs de producción)
+COPY .env .env
 
 # Copiar código fuente
 COPY . .
