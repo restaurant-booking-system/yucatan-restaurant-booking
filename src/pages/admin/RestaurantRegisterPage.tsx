@@ -27,6 +27,7 @@ import {
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import ImageUpload from '@/components/ImageUpload';
 import { authService } from '@/services/api';
 import { toast } from 'sonner';
 
@@ -630,22 +631,11 @@ const RestaurantRegisterPage = () => {
                                     {errors.capacity && <p className="text-xs text-destructive">{errors.capacity}</p>}
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="imageUrl" className="flex items-center gap-2">
-                                        <Image className="w-4 h-4 text-muted-foreground" />
-                                        URL de imagen (opcional)
-                                    </Label>
-                                    <Input
-                                        id="imageUrl"
-                                        type="url"
-                                        placeholder="https://ejemplo.com/imagen.jpg"
-                                        value={formData.imageUrl}
-                                        onChange={(e) => updateField('imageUrl', e.target.value)}
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Puedes agregar más imágenes después desde el panel de administración
-                                    </p>
-                                </div>
+                                <ImageUpload
+                                    value={formData.imageUrl}
+                                    onChange={(url) => updateField('imageUrl', url)}
+                                    label="Imagen del restaurante (opcional)"
+                                />
                             </div>
                         )}
 

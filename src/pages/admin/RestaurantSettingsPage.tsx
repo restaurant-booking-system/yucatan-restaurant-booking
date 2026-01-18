@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Users, CreditCard, Bell, Shield, Save, Loader2 } from 'lucide-react';
+import { Clock, Users, CreditCard, Bell, Shield, Save, Loader2, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,16 +8,33 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import ImageUpload from '@/components/ImageUpload';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 import { useUpdateRestaurant } from '@/hooks/useData';
 import { toast } from 'sonner';
+
+const cuisines = ['Yucateca', 'Mariscos', 'Fusión', 'Internacional', 'Italiana', 'Mexicana', 'Japonesa', 'Otro'];
+const priceRanges = [
+    { value: '$', label: '$ - Económico' },
+    { value: '$$', label: '$$ - Moderado' },
+    { value: '$$$', label: '$$$ - Elevado' },
+    { value: '$$$$', label: '$$$$ - Premium' },
+];
 
 const RestaurantSettingsPage = () => {
     const { restaurant } = useRestaurantAuth();
     const updateMutation = useUpdateRestaurant();
 
     const [formState, setFormState] = useState({
+        // Basic info
+        name: restaurant?.name || '',
+        description: restaurant?.description || '',
+        cuisine: restaurant?.cuisine || '',
+        priceRange: restaurant?.priceRange || '',
+        image: restaurant?.image || '',
+        // Schedule
         openTime: restaurant?.openTime || '12:00',
         closeTime: restaurant?.closeTime || '23:00',
         reservationBuffer: '15',
@@ -34,6 +51,11 @@ const RestaurantSettingsPage = () => {
         if (restaurant) {
             setFormState(prev => ({
                 ...prev,
+                name: restaurant.name || prev.name,
+                description: restaurant.description || prev.description,
+                cuisine: restaurant.cuisine || prev.cuisine,
+                priceRange: restaurant.priceRange || prev.priceRange,
+                image: restaurant.image || prev.image,
                 openTime: restaurant.openTime || prev.openTime,
                 closeTime: restaurant.closeTime || prev.closeTime,
                 maxPartySize: restaurant.maxGuestCount?.toString() || prev.maxPartySize,
@@ -49,6 +71,11 @@ const RestaurantSettingsPage = () => {
             await updateMutation.mutateAsync({
                 restaurantId: restaurant.id,
                 updates: {
+                    name: formState.name,
+                    description: formState.description,
+                    cuisine: formState.cuisine,
+                    priceRange: formState.priceRange,
+                    image: formState.image,
                     openTime: formState.openTime,
                     closeTime: formState.closeTime,
                     maxGuestCount: parseInt(formState.maxPartySize),
@@ -76,14 +103,84 @@ const RestaurantSettingsPage = () => {
                     </Button>
                 </div>
 
-                <Tabs defaultValue="general" className="space-y-6">
-                    <TabsList className="grid grid-cols-2 md:grid-cols-5 gap-2 h-auto p-1 bg-muted/50">
+                <Tabs defaultValue="info" className="space-y-6">
+                    <TabsList className="grid grid-cols-2 md:grid-cols-6 gap-2 h-auto p-1 bg-muted/50">
+                        <TabsTrigger value="info" className="py-2"><Store className="w-4 h-4 mr-2" />Información</TabsTrigger>
                         <TabsTrigger value="general" className="py-2"><Clock className="w-4 h-4 mr-2" />Horarios</TabsTrigger>
                         <TabsTrigger value="reservations" className="py-2"><Users className="w-4 h-4 mr-2" />Reservas</TabsTrigger>
                         <TabsTrigger value="deposits" className="py-2"><CreditCard className="w-4 h-4 mr-2" />Anticipos</TabsTrigger>
                         <TabsTrigger value="notifications" className="py-2"><Bell className="w-4 h-4 mr-2" />Notificaciones</TabsTrigger>
                         <TabsTrigger value="users" className="py-2"><Shield className="w-4 h-4 mr-2" />Acceso</TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="info" className="space-y-6 animate-in fade-in-50 duration-300">
+                        <div className="bg-card rounded-2xl p-8 shadow-sm border space-y-8">
+                            <div>
+                                <h3 className="text-xl font-bold mb-1">Información del Restaurante</h3>
+                                <p className="text-sm text-muted-foreground">Datos básicos que aparecerán en la plataforma.</p>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <Label className="text-xs uppercase tracking-widest font-bold">Nombre del Restaurante</Label>
+                                    <Input
+                                        value={formState.name}
+                                        onChange={(e) => setFormState({ ...formState, name: e.target.value })}
+                                        className="h-12 text-lg font-medium"
+                                        placeholder="Ej: La Casa del Chef"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-xs uppercase tracking-widest font-bold">Descripción</Label>
+                                    <Textarea
+                                        value={formState.description}
+                                        onChange={(e) => setFormState({ ...formState, description: e.target.value })}
+                                        className="min-h-[120px]"
+                                        placeholder="Describe tu restaurante, especialidades, ambiente..."
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs uppercase tracking-widest font-bold">Tipo de Cocina</Label>
+                                        <Select value={formState.cuisine} onValueChange={(v) => setFormState({ ...formState, cuisine: v })}>
+                                            <SelectTrigger className="h-11">
+                                                <SelectValue placeholder="Selecciona" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {cuisines.map(cuisine => (
+                                                    <SelectItem key={cuisine} value={cuisine}>{cuisine}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-xs uppercase tracking-widest font-bold">Rango de Precios</Label>
+                                        <Select value={formState.priceRange} onValueChange={(v) => setFormState({ ...formState, priceRange: v })}>
+                                            <SelectTrigger className="h-11">
+                                                <SelectValue placeholder="Selecciona" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {priceRanges.map(range => (
+                                                    <SelectItem key={range.value} value={range.value}>{range.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <Separator />
+
+                                <ImageUpload
+                                    value={formState.image}
+                                    onChange={(url) => setFormState({ ...formState, image: url })}
+                                    label="Imagen Principal del Restaurante"
+                                />
+                            </div>
+                        </div>
+                    </TabsContent>
 
                     <TabsContent value="general" className="space-y-6 animate-in fade-in-50 duration-300">
                         <div className="bg-card rounded-2xl p-8 shadow-sm border space-y-8">

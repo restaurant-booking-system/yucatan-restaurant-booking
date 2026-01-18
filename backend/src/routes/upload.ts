@@ -75,6 +75,60 @@ router.post('/menu-image', authenticateAdmin, upload.single('image'), async (req
 });
 
 /**
+ * POST /api/upload/restaurant-main-image
+ * Subir imagen principal del restaurante
+ */
+router.post('/restaurant-main-image', authenticateAdmin, upload.single('image'), async (req: Request, res: Response) => {
+    try {
+        const file = req.file;
+        const restaurantId = (req as any).user?.restaurantId;
+
+        if (!file) {
+            res.status(400).json({ success: false, error: 'No se proporcionó ninguna imagen' });
+            return;
+        }
+
+        const fileExt = file.originalname.split('.').pop();
+        const fileName = `restaurants/${restaurantId}/main-${uuidv4()}.${fileExt}`;
+
+        const { data, error } = await supabaseAdmin.storage
+            .from('images')
+            .upload(fileName, file.buffer, {
+                contentType: file.mimetype,
+                upsert: false
+            });
+
+        if (error) {
+            console.error('Error uploading:', error);
+            res.status(500).json({ success: false, error: 'Error al subir imagen' });
+            return;
+        }
+
+        const { data: urlData } = supabaseAdmin.storage
+            .from('images')
+            .getPublicUrl(fileName);
+
+        // Actualizar la imagen principal del restaurante
+        await supabaseAdmin
+            .from('restaurants')
+            .update({ image: urlData.publicUrl })
+            .eq('id', restaurantId);
+
+        res.json({
+            success: true,
+            data: {
+                url: urlData.publicUrl,
+                path: fileName
+            },
+            message: 'Imagen principal actualizada'
+        });
+    } catch (error) {
+        console.error('Upload error:', error);
+        res.status(500).json({ success: false, error: 'Error al procesar imagen' });
+    }
+});
+
+/**
  * POST /api/upload/restaurant-photo
  * Subir foto del restaurante (galería)
  */

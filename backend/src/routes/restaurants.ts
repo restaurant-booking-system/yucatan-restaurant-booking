@@ -447,4 +447,84 @@ router.get('/:id/reservations', authMiddleware, async (req: Request, res: Respon
     }
 });
 
+/**
+ * PATCH /api/restaurants/:id
+ * Update restaurant information (owner only)
+ */
+router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        // Verify ownership
+        const { data: restaurant, error: rError } = await supabase
+            .from('restaurants')
+            .select('owner_id')
+            .eq('id', id)
+            .single();
+
+        if (rError || !restaurant) {
+            res.status(404).json({ success: false, error: 'Restaurant not found' });
+            return;
+        }
+
+        // Only allow owner to update
+        if (restaurant.owner_id !== req.user!.id && req.user!.role !== 'super_admin') {
+            res.status(403).json({ success: false, error: 'Unauthorized to update this restaurant' });
+            return;
+        }
+
+        // Allowed fields to update
+        const allowedFields = [
+            'name',
+            'description',
+            'image',
+            'cuisine_type',
+            'price_range',
+            'open_time',
+            'close_time',
+            'max_guest_count',
+            'has_deposit',
+            'address',
+            'zone'
+        ];
+
+        // Filter updates to only include allowed fields
+        const filteredUpdates: any = {};
+        for (const field of allowedFields) {
+            if (updates[field] !== undefined) {
+                filteredUpdates[field] = updates[field];
+            }
+        }
+
+        if (Object.keys(filteredUpdates).length === 0) {
+            res.status(400).json({ success: false, error: 'No valid fields to update' });
+            return;
+        }
+
+        // Update restaurant
+        const { data: updatedRestaurant, error: updateError } = await supabaseAdmin
+            .from('restaurants')
+            .update(filteredUpdates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (updateError) {
+            console.error('Error updating restaurant:', updateError);
+            res.status(500).json({ success: false, error: 'Error updating restaurant' });
+            return;
+        }
+
+        res.json({
+            success: true,
+            data: updatedRestaurant,
+            message: 'Restaurant updated successfully'
+        });
+    } catch (error) {
+        console.error('Update restaurant error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
 export default router;
