@@ -59,7 +59,8 @@ export const ImageUpload = ({
         try {
             // Get token from restaurant session
             const sessionData = localStorage.getItem('mesafeliz_restaurant_session');
-            let token = null;
+            const session = JSON.parse(sessionData);
+            let token = session.token;
 
             if (sessionData) {
                 try {
