@@ -11,8 +11,8 @@ dist
 build
 .vite
 
-# Environment files
-.env
+# Environment files (excluding .env which is needed for production build)
+# .env  <- Removed to allow production config
 .env.local
 .env.*.local
 

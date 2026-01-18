@@ -13,10 +13,7 @@ COPY package*.json ./
 # Instalar dependencias
 RUN npm install
 
-# Copiar .env primero (con las URLs de producción)
-COPY .env .env
-
-# Copiar código fuente
+# Copiar código fuente (incluye .env del repositorio)
 COPY . .
 
 # Build de producción
