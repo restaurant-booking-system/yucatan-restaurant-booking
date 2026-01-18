@@ -474,19 +474,21 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
             return;
         }
 
-        // Allowed fields to update
+        // Allowed fields to update (must match actual database columns)
         const allowedFields = [
             'name',
             'description',
             'image',
+            'image_url',
             'cuisine_type',
             'price_range',
             'open_time',
             'close_time',
-            'max_guest_count',
             'has_deposit',
             'address',
-            'zone'
+            'zone',
+            'phone',
+            'email'
         ];
 
         // Map frontend camelCase to database snake_case
