@@ -489,11 +489,28 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
             'zone'
         ];
 
+        // Map frontend camelCase to database snake_case
+        const fieldMapping: Record<string, string> = {
+            'cuisine': 'cuisine_type',
+            'priceRange': 'price_range',
+            'openTime': 'open_time',
+            'closeTime': 'close_time',
+            'maxGuestCount': 'max_guest_count',
+            'hasDeposit': 'has_deposit'
+        };
+
+        // Convert frontend fields to backend fields
+        const mappedUpdates: any = {};
+        for (const [key, value] of Object.entries(updates)) {
+            const mappedKey = fieldMapping[key] || key;
+            mappedUpdates[mappedKey] = value;
+        }
+
         // Filter updates to only include allowed fields
         const filteredUpdates: any = {};
         for (const field of allowedFields) {
-            if (updates[field] !== undefined) {
-                filteredUpdates[field] = updates[field];
+            if (mappedUpdates[field] !== undefined) {
+                filteredUpdates[field] = mappedUpdates[field];
             }
         }
 
