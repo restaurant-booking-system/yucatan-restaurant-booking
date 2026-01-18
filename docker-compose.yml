@@ -31,8 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=http://localhost:3002/api
+      # No args needed - uses .env from repository
     container_name: sittara-frontend
     restart: unless-stopped
     ports:
