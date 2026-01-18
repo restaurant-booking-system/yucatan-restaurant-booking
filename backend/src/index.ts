@@ -128,7 +128,7 @@ if (process.env.NODE_ENV !== 'test') {
         console.log('');
         console.log('🍽️  ════════════════════════════════════════════');
         console.log('');
-        console.log('   MESA FELIZ API');
+        console.log('   MESA FELIZ API (SITTARA)');
         console.log('   Restaurant Reservation System');
         console.log('');
         console.log(`   🚀 Server running on port ${env.port}`);

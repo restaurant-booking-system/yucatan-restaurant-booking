@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
   User, Mail, Phone, MapPin, Bell, Heart, Star,
-  ChevronRight, Settings, LogOut, Camera, Shield
+  ChevronRight, Settings, LogOut, Camera, Shield,
+  Calendar, Check, X, Edit2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

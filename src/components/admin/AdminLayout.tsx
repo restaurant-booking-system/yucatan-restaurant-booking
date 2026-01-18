@@ -103,7 +103,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                                     exit={{ opacity: 0, width: 0 }}
                                     className="overflow-hidden"
                                 >
-                                    <h1 className="text-lg font-display font-bold whitespace-nowrap">Mesa Feliz</h1>
+                                    <h1 className="text-lg font-display font-bold whitespace-nowrap">Sittara</h1>
                                     <p className="text-xs text-sidebar-foreground/60">Admin Panel</p>
                                 </motion.div>
                             )}
@@ -183,7 +183,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                                         <ChefHat className="w-6 h-6 text-sidebar-primary-foreground" />
                                     </div>
                                     <div>
-                                        <h1 className="text-lg font-display font-bold">Mesa Feliz</h1>
+                                        <h1 className="text-lg font-display font-bold">Sittara</h1>
                                         <p className="text-xs text-sidebar-foreground/60">Admin Panel</p>
                                     </div>
                                 </div>

@@ -340,7 +340,7 @@ const RestaurantRegisterPage = () => {
                             Registra tu Restaurante
                         </h1>
                         <p className="text-muted-foreground">
-                            Únete a Mesa Feliz y aumenta tus reservaciones
+                            Únete a Sittara y aumenta tus reservaciones
                         </p>
                     </motion.div>
 

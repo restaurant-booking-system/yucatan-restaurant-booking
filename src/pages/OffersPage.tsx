@@ -237,7 +237,7 @@ const OffersPage = () => {
                             ¿Tienes un restaurante?
                         </h2>
                         <p className="opacity-90 mb-6 max-w-xl mx-auto">
-                            Únete a Mesa Feliz y promociona tus ofertas especiales a miles de comensales en Mérida.
+                            © 2024 Sittara. Todos los derechos reservados. especiales a miles de comensales en Mérida.
                         </p>
                         <Link to="/admin/login">
                             <Button variant="secondary" size="lg" className="gap-2">
