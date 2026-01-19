@@ -137,6 +137,11 @@ function mapTableStatus(status: string): Table['status'] {
 }
 
 function transformReservation(data: any): Reservation {
+    // Handle joined user data - backend returns 'users' not 'user'
+    const userData = data.users || data.user;
+    // Handle joined table data - backend returns 'tables' not 'table'
+    const tableData = data.tables || data.table;
+
     return {
         id: data.id,
         restaurantId: data.restaurant_id,
@@ -146,15 +151,28 @@ function transformReservation(data: any): Reservation {
         time: data.time,
         guestCount: data.guest_count,
         status: data.status,
-        customerName: data.customer_name || (data.user?.name) || 'Cliente',
-        customerEmail: data.customer_email || (data.user?.email),
-        customerPhone: data.customer_phone || (data.user?.phone),
+        customerName: data.customer_name || userData?.name || 'Cliente',
+        customerEmail: data.customer_email || userData?.email,
+        customerPhone: data.customer_phone || userData?.phone,
         occasion: data.occasion,
         specialRequest: data.special_request,
         depositAmount: data.deposit_amount,
         depositPaid: data.deposit_paid,
         qrCode: data.qr_code,
         createdAt: data.created_at,
+        // Include table info for display
+        table: tableData ? {
+            id: tableData.id,
+            restaurantId: data.restaurant_id,
+            number: tableData.number,
+            capacity: tableData.capacity,
+            status: 'disponible' as const,
+            x: 0,
+            y: 0,
+            shape: 'round' as const,
+            width: 60,
+            height: 60,
+        } : undefined,
     };
 }
 
@@ -424,15 +442,42 @@ export const reservationService = {
     },
 
     async updateStatus(reservationId: string, status: Reservation['status']): Promise<Reservation> {
-        // Try admin token first
+        // Get admin token
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const adminToken = session ? JSON.parse(session).token : null;
 
-        const headers: Record<string, string> = {};
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
         if (adminToken) {
             headers['Authorization'] = `Bearer ${adminToken}`;
         }
 
+        // Use admin endpoints for restaurant-specific operations to verify ownership
+        if (adminToken && (status === 'confirmed' || status === 'cancelled')) {
+            const adminEndpoint = status === 'confirmed'
+                ? `/admin/reservas/${reservationId}/aceptar`
+                : `/admin/reservas/${reservationId}/cancelar`;
+
+            const response = await fetch(`${API_BASE_URL}${adminEndpoint}`, {
+                method: 'PATCH',
+                headers,
+                body: status === 'cancelled' ? JSON.stringify({ reason: 'Rechazada por el restaurante' }) : undefined,
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(error.error || `HTTP error! status: ${response.status}`);
+            }
+
+            const json = await response.json();
+            if (!json.success) {
+                throw new Error(json.error || 'Failed to update reservation status');
+            }
+            return transformReservation(json.data);
+        }
+
+        // For other statuses, use the generic endpoint
         const data = await apiCall<any>(`/reservations/${reservationId}/status`, {
             method: 'PATCH',
             body: JSON.stringify({ status }),
