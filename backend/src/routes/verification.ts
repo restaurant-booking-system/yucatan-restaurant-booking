@@ -32,22 +32,24 @@ router.post('/send-code', async (req: Request, res: Response) => {
         });
 
         console.log(`📧 Verification code for ${email}: ${code}`);
+        console.log(`📧 Attempting to send email via Gmail...`);
 
-        // Send real email using Resend
+        // Send real email using Gmail
         const emailSent = await sendVerificationCode({ to: email, code });
 
-        if (!emailSent) {
-            console.warn('⚠️ Email not sent, but code stored. User can still use devCode in development.');
+        if (emailSent) {
+            console.log(`✅ Email sent successfully to ${email}`);
+            res.json({
+                success: true,
+                message: 'Código de verificación enviado a tu correo'
+            });
+        } else {
+            console.error(`❌ Failed to send email to ${email}`);
+            res.status(500).json({
+                success: false,
+                error: 'No se pudo enviar el correo. Verifica que el email sea válido.'
+            });
         }
-
-        res.json({
-            success: true,
-            message: emailSent
-                ? 'Código de verificación enviado a tu correo'
-                : 'Código generado (revisa la consola en desarrollo)',
-            // Always include devCode for now until Resend domain is verified
-            devCode: code
-        });
 
     } catch (error) {
         console.error('Error sending verification code:', error);

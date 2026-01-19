@@ -325,11 +325,14 @@ export async function authenticateAdmin(
         req.accessToken = token;
 
         let userId: string | undefined;
+        let restaurantIdFromToken: string | undefined;
 
         try {
             // Try to verify as our custom JWT first
             const decoded = jwt.verify(token, env.jwtSecret) as any;
             userId = decoded.userId || decoded.id;
+            // IMPORTANT: Get restaurantId from the token if available
+            restaurantIdFromToken = decoded.restaurantId;
         } catch (jwtError) {
             // If not our JWT, try Supabase
             const { data: { user }, error: supabaseError } = await supabase.auth.getUser(token);
@@ -370,20 +373,29 @@ export async function authenticateAdmin(
             return;
         }
 
-        // Get the restaurant owned by this admin
-        const { data: restaurant } = await supabaseAdmin
-            .from('restaurants')
-            .select('id')
-            .eq('owner_id', userId)
-            .single();
+        // Use restaurantId from token if available, otherwise query
+        let restaurantId = restaurantIdFromToken;
+
+        if (!restaurantId) {
+            // Fallback: Get the most recently created restaurant owned by this admin
+            const { data: restaurant } = await supabaseAdmin
+                .from('restaurants')
+                .select('id')
+                .eq('owner_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            restaurantId = restaurant?.id;
+        }
 
         // Attach user and restaurantId to request
         (req as any).user = {
             ...userProfile,
-            restaurantId: restaurant?.id
+            restaurantId: restaurantId
         };
 
-        if (!restaurant?.id && userProfile.role !== 'super_admin') {
+        if (!restaurantId && userProfile.role !== 'super_admin') {
             res.status(403).json({
                 success: false,
                 error: 'No restaurant associated with this account',

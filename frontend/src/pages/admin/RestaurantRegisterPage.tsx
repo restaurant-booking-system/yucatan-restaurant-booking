@@ -58,7 +58,6 @@ const RestaurantRegisterPage = () => {
     const [isVerifyingCode, setIsVerifyingCode] = useState(false);
     const [verifyError, setVerifyError] = useState('');
     const [codeSent, setCodeSent] = useState(false);
-    const [devCode, setDevCode] = useState<string | null>(null); // For development mode
 
     // Form data
     const [formData, setFormData] = useState({
@@ -114,11 +113,6 @@ const RestaurantRegisterPage = () => {
                 setShowVerifyModal(true);
                 setVerifyError('');
                 toast.success('Código enviado a tu correo');
-                // In development, store the code to show in modal
-                if (data.devCode) {
-                    setDevCode(data.devCode);
-                    console.log('📧 Dev verification code:', data.devCode);
-                }
             } else {
                 toast.error(data.error || 'Error al enviar código');
             }
@@ -773,14 +767,6 @@ const RestaurantRegisterPage = () => {
                                 />
                             ))}
                         </div>
-
-                        {/* Development mode: Show the code */}
-                        {devCode && (
-                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-                                <p className="text-xs text-amber-600 mb-1">🔧 Modo desarrollo - Código:</p>
-                                <p className="text-2xl font-bold text-amber-800 tracking-widest">{devCode}</p>
-                            </div>
-                        )}
 
                         {verifyError && (
                             <p className="text-sm text-destructive text-center">{verifyError}</p>

@@ -1,6 +1,41 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const OAuth2 = google.auth.OAuth2;
+
+// Gmail OAuth2 configuration
+const oauth2Client = new OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+);
+
+oauth2Client.setCredentials({
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN
+});
+
+async function createTransporter() {
+    try {
+        const accessToken = await oauth2Client.getAccessToken();
+
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                type: 'OAuth2',
+                user: process.env.GMAIL_USER,
+                clientId: process.env.GMAIL_CLIENT_ID,
+                clientSecret: process.env.GMAIL_CLIENT_SECRET,
+                refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+                accessToken: accessToken.token || ''
+            }
+        });
+
+        return transporter;
+    } catch (error) {
+        console.error('Error creating email transporter:', error);
+        throw error;
+    }
+}
 
 interface SendVerificationCodeOptions {
     to: string;
@@ -9,9 +44,11 @@ interface SendVerificationCodeOptions {
 
 export async function sendVerificationCode({ to, code }: SendVerificationCodeOptions): Promise<boolean> {
     try {
-        const { data, error } = await resend.emails.send({
-            from: 'Mesa Feliz <onboarding@resend.dev>', // Use Resend's test domain
-            to: [to],
+        const transporter = await createTransporter();
+
+        const mailOptions = {
+            from: `Mesa Feliz <${process.env.GMAIL_USER}>`,
+            to: to,
             subject: '🔐 Código de verificación - Mesa Feliz',
             html: `
 <!DOCTYPE html>
@@ -67,14 +104,10 @@ export async function sendVerificationCode({ to, code }: SendVerificationCodeOpt
 </body>
 </html>
             `,
-        });
+        };
 
-        if (error) {
-            console.error('Error sending email:', error);
-            return false;
-        }
-
-        console.log('✅ Email sent successfully:', data?.id);
+        const result = await transporter.sendMail(mailOptions);
+        console.log('✅ Email sent successfully:', result.messageId);
         return true;
     } catch (error) {
         console.error('Error sending verification email:', error);
@@ -84,9 +117,11 @@ export async function sendVerificationCode({ to, code }: SendVerificationCodeOpt
 
 export async function sendWelcomeEmail(to: string, restaurantName: string): Promise<boolean> {
     try {
-        const { error } = await resend.emails.send({
-            from: 'Mesa Feliz <onboarding@resend.dev>',
-            to: [to],
+        const transporter = await createTransporter();
+
+        const mailOptions = {
+            from: `Mesa Feliz <${process.env.GMAIL_USER}>`,
+            to: to,
             subject: `🎉 ¡Bienvenido a Mesa Feliz, ${restaurantName}!`,
             html: `
 <!DOCTYPE html>
@@ -108,12 +143,10 @@ export async function sendWelcomeEmail(to: string, restaurantName: string): Prom
 </body>
 </html>
             `,
-        });
+        };
 
-        if (error) {
-            console.error('Error sending welcome email:', error);
-            return false;
-        }
+        const result = await transporter.sendMail(mailOptions);
+        console.log('✅ Welcome email sent:', result.messageId);
         return true;
     } catch (error) {
         console.error('Error sending welcome email:', error);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Star, ChevronLeft, Heart, Users, Calendar, Clock, ArrowRight } from 'lucide-react';
@@ -11,7 +11,7 @@ import PhotoGallery from '@/components/restaurant/PhotoGallery';
 import RestaurantInfo from '@/components/restaurant/RestaurantInfo';
 import OffersSection from '@/components/restaurant/OffersSection';
 import ReviewsList from '@/components/restaurant/ReviewsList';
-import { useRestaurant, useMenu, useRestaurantOffers } from '@/hooks/useData';
+import { useRestaurant, useMenu, useRestaurantOffers, useReviews } from '@/hooks/useData';
 
 const RestaurantProfilePage = () => {
   const { id } = useParams();
@@ -19,37 +19,8 @@ const RestaurantProfilePage = () => {
   const { data: restaurant, isLoading } = useRestaurant(id);
   const { data: menuItems = [] } = useMenu(id);
   const { data: restaurantOffers = [] } = useRestaurantOffers(id);
+  const { data: reviews = [] } = useReviews(id); // Fetch real reviews from API
   const [isFavorite, setIsFavorite] = useState(false);
-  const [reviews, setReviews] = useState<any[]>([]);
-
-  // Fetch reviews (mock for now)
-  useEffect(() => {
-    // TODO: Replace with actual API call
-    setReviews([
-      {
-        id: '1',
-        userName: 'María García',
-        rating: 5,
-        foodRating: 5,
-        serviceRating: 4,
-        ambianceRating: 5,
-        comment: 'Excelente experiencia! La comida yucateca es auténtica y deliciosa. El servicio fue muy atento.',
-        tags: ['Romántico', 'Buena música'],
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: '2',
-        userName: 'Carlos Méndez',
-        rating: 4,
-        foodRating: 4,
-        serviceRating: 5,
-        comment: 'Muy buen restaurante, la cochinita pibil es de las mejores que he probado.',
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-        response: 'Gracias por tu visita, Carlos! Nos alegra que hayas disfrutado.',
-        respondedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      },
-    ]);
-  }, [id]);
 
   if (isLoading) {
     return (
