@@ -84,7 +84,8 @@ function transformRestaurant(data: any): Restaurant {
     // Handle cases where joined data might come as an array (common in some PostgREST/Supabase joins)
     const item = Array.isArray(data) ? data[0] : data;
 
-    if (!item) return {} as Restaurant;
+    // Parse settings JSONB for deposit and other config
+    const settings = item.settings || {};
 
     return {
         id: item.id,
@@ -104,6 +105,12 @@ function transformRestaurant(data: any): Restaurant {
         email: item.email,
         hasOffers: item.has_offers || (Array.isArray(item.offers) && item.offers.length > 0),
         offerText: item.offer_text || (Array.isArray(item.offers) && item.offers.length > 0 ? item.offers[0].title : undefined),
+        // Deposit configuration from settings JSONB
+        hasDeposit: settings.depositRequired || false,
+        depositAmount: settings.depositAmount || 200,
+        maxGuestCount: settings.maxPartySize || item.max_guest_count || 12,
+        // Include raw settings for admin use
+        settings: settings,
     };
 }
 
@@ -263,9 +270,34 @@ export const restaurantService = {
     },
 
     async update(id: string, updates: Partial<Restaurant>): Promise<Restaurant> {
+        // Map frontend camelCase to backend snake_case
+        const backendUpdates: Record<string, any> = {};
+
+        if (updates.name !== undefined) backendUpdates.name = updates.name;
+        if (updates.description !== undefined) backendUpdates.description = updates.description;
+        if (updates.cuisine !== undefined) backendUpdates.cuisine_type = updates.cuisine;
+        if (updates.priceRange !== undefined) backendUpdates.price_range = updates.priceRange;
+        if (updates.image !== undefined) backendUpdates.image_url = updates.image;
+        if (updates.openTime !== undefined) backendUpdates.open_time = updates.openTime;
+        if (updates.closeTime !== undefined) backendUpdates.close_time = updates.closeTime;
+
+        // Build settings object for JSONB update
+        const settingsUpdates: Record<string, any> = {};
+        if ((updates as any).maxGuestCount !== undefined) settingsUpdates.maxPartySize = (updates as any).maxGuestCount;
+        if ((updates as any).hasDeposit !== undefined) settingsUpdates.depositRequired = (updates as any).hasDeposit;
+        if ((updates as any).depositAmount !== undefined) settingsUpdates.depositAmount = (updates as any).depositAmount;
+        if ((updates as any).depositHours !== undefined) settingsUpdates.depositHours = (updates as any).depositHours;
+
+        // Only include settings if there are updates
+        if (Object.keys(settingsUpdates).length > 0) {
+            // Get current settings first to merge
+            const currentSettings = (updates as any).settings || {};
+            backendUpdates.settings = { ...currentSettings, ...settingsUpdates };
+        }
+
         const data = await apiCall<any>(`/restaurants/${id}`, {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            body: JSON.stringify(backendUpdates),
         });
         return transformRestaurant(data);
     },
@@ -290,11 +322,21 @@ export const tableService = {
     async updateStatus(tableId: string, status: Table['status']): Promise<Table> {
         const backendStatus = mapFrontendStatusToBackend(status);
 
-        const data = await apiCall<any>(`/tables/${tableId}/status`, {
+        // Use the admin/mesas endpoint which already exists
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/mesas/${tableId}`, {
             method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
             body: JSON.stringify({ status: backendStatus }),
         });
-        return transformTable(data);
+        const json = await response.json();
+        if (!json.success) throw new Error(json.error || 'Failed to update table status');
+        return transformTable(json.data);
     },
 
     async getAvailable(restaurantId: string, date: string, time: string, guestCount: number): Promise<Table[]> {
@@ -603,31 +645,57 @@ export const offerService = {
 export const timeSlotService = {
     async getAvailable(restaurantId: string, date: string): Promise<TimeSlot[]> {
         try {
+            // First try to get from API
             const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/timeslots?date=${date}`);
             const json = await response.json();
 
-            if (!json.success || !json.data) {
-                // Return default time slots if API doesn't provide them
-                return generateDefaultTimeSlots();
+            if (json.success && json.data) {
+                return json.data;
             }
 
-            return json.data;
+            // Fallback: Get restaurant settings and generate time slots with correct deposit info
+            const restaurant = await restaurantService.getById(restaurantId);
+            const settings = (restaurant as any)?.settings || {};
+
+            // Debug: log what we're getting from the restaurant
+            console.log('Restaurant for timeslots:', restaurant);
+            console.log('Restaurant settings:', settings);
+            console.log('depositRequired:', settings.depositRequired);
+            console.log('depositAmount:', settings.depositAmount);
+            console.log('depositHours:', settings.depositHours);
+
+            return generateTimeSlots(
+                settings.depositAmount || 200,
+                settings.depositRequired || false,
+                settings.depositHours || ['19:00', '19:30', '20:00', '20:30', '21:00']
+            );
         } catch (error) {
             console.error('Error fetching time slots:', error);
-            return generateDefaultTimeSlots();
+            return generateTimeSlots(200, false, ['19:00', '19:30', '20:00', '20:30', '21:00']);
         }
     },
 };
 
-function generateDefaultTimeSlots(): TimeSlot[] {
+function generateTimeSlots(depositAmount: number, depositRequired: boolean, depositHours: string[]): TimeSlot[] {
     const slots: TimeSlot[] = [];
     for (let hour = 12; hour <= 22; hour++) {
+        const time = `${hour}:00`;
+
+        // Check if this hour is in depositHours - deposit is required if time is listed
+        // Changed: now we check depositHours directly, not the depositRequired flag
+        const isDepositHour = depositHours.length > 0 && depositHours.some(dh =>
+            dh.startsWith(`${hour}:`) || dh === time
+        );
+
+        // Deposit is required if: there are deposit hours AND this is one of them
+        const requiresDeposit = isDepositHour;
+
         slots.push({
-            time: `${hour}:00`,
+            time,
             available: true,
             isPeak: hour >= 19 && hour <= 21,
-            requiresDeposit: hour >= 19 && hour <= 21,
-            depositAmount: hour >= 19 && hour <= 21 ? 200 : undefined,
+            requiresDeposit,
+            depositAmount: requiresDeposit ? depositAmount : undefined,
         });
     }
     return slots;
@@ -975,7 +1043,7 @@ export const dashboardService = {
             return {
                 reservationsToday: json.data.reservas_hoy || 0,
                 reservationsChange: 0,
-                currentOccupancy: 0,
+                currentOccupancy: json.data.ocupacion_actual || 0,
                 expectedRevenue: json.data.ingresos_anticipos || 0,
                 revenueChange: 0,
                 pendingConfirmations: json.data.reservas_pendientes || 0,
@@ -989,33 +1057,41 @@ export const dashboardService = {
     },
 
     async getAISuggestions(_restaurantId: string): Promise<AISuggestion[]> {
-        // AI suggestions are mocked for now - will implement in Phase 4
-        return [
-            {
-                id: '1',
-                category: 'ocupacion',
-                title: 'Optimiza tus horarios pico',
-                description: 'Los viernes entre 8-9pm tienes 90% de ocupación. Considera agregar más mesas.',
-                priority: 'alta',
-                confidence: 85,
-                estimatedImpact: '+15% ocupación',
-                actionLabel: 'Ver análisis',
-                isApplied: false,
-                createdAt: new Date().toISOString(),
-            },
-            {
-                id: '2',
-                category: 'marketing',
-                title: 'Tendencia positiva',
-                description: 'Tus reservaciones aumentaron 15% respecto al mes pasado.',
-                priority: 'media',
-                confidence: 90,
-                estimatedImpact: 'Información',
-                actionLabel: 'Ver detalles',
-                isApplied: false,
-                createdAt: new Date().toISOString(),
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/ia-sugerencias`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
             }
-        ];
+        });
+        const json = await response.json();
+
+        if (!json.success) {
+            return [];
+        }
+
+        return json.data;
+    },
+
+    async getReports(period: 'week' | 'month' | 'quarter' = 'month'): Promise<any[]> {
+        const session = localStorage.getItem('mesafeliz_restaurant_session');
+        const token = session ? JSON.parse(session).token : null;
+
+        const response = await fetch(`${API_BASE_URL}/admin/reportes?period=${period}`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+        });
+        const json = await response.json();
+
+        if (!json.success) {
+            return [];
+        }
+
+        return json.data;
     },
 };
 

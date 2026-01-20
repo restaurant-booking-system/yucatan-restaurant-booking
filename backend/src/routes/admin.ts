@@ -63,12 +63,25 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
             : 0;
 
+        // Reservas pendientes (total)
+        const { count: reservasPendientes } = await supabaseAdmin
+            .from('reservations')
+            .select('*', { count: 'exact', head: true })
+            .eq('restaurant_id', restaurantId)
+            .eq('status', 'pending');
+
+        const ocupacionActual = totalMesas && totalMesas > 0
+            ? Math.round((mesasOcupadas || 0) / totalMesas * 100)
+            : 0;
+
         res.json({
             success: true,
             data: {
                 reservas_hoy: reservasHoy || 0,
+                reservas_pendientes: reservasPendientes || 0,
                 mesas_ocupadas: mesasOcupadas || 0,
                 total_mesas: totalMesas || 0,
+                ocupacion_actual: ocupacionActual,
                 ingresos_anticipos: ingresosAnticipos,
                 calificacion_promedio: Math.round(calificacionPromedio * 10) / 10,
                 total_reviews: reviews?.length || 0
@@ -820,6 +833,177 @@ router.put('/configuracion', async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Guardar configuración error:', error);
         res.status(500).json({ success: false, error: 'Error al guardar configuración' });
+    }
+});
+
+// ============================================
+// 📈 REPORTES
+// ============================================
+
+/**
+ * GET /api/admin/reportes
+ * Obtiene datos históricos para reportes
+ */
+router.get('/reportes', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+        const { period = 'month' } = req.query; // week, month, quarter
+
+        // Calcular rango de fechas
+        const endDate = new Date();
+        const startDate = new Date();
+
+        if (period === 'week') startDate.setDate(endDate.getDate() - 7);
+        else if (period === 'quarter') startDate.setMonth(endDate.getMonth() - 3);
+        else startDate.setMonth(endDate.getMonth() - 1); // default month
+
+        // Obtener reservaciones en el rango
+        const { data: reservations, error } = await supabaseAdmin
+            .from('reservations')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .gte('date', startDate.toISOString().split('T')[0])
+            .lte('date', endDate.toISOString().split('T')[0]);
+
+        if (error) throw error;
+
+        // Procesar datos para gráficas (agrupados por día)
+        const dailyStats: Record<string, { reservations: number, occupancy: number, revenue: number }> = {};
+
+        // Inicializar días
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            const dayStr = d.toISOString().split('T')[0];
+            dailyStats[dayStr] = { reservations: 0, occupancy: 0, revenue: 0 };
+        }
+
+        reservations?.forEach(res => {
+            if (dailyStats[res.date]) {
+                dailyStats[res.date].reservations++;
+                if (res.status === 'confirmed' || res.status === 'arrived') {
+                    // Estimación simple de ocupación y revenue
+                    dailyStats[res.date].occupancy += (res.party_size || 2) * 5; // 5% por persona (mock)
+                    // Revenue = depósito + estimado consumo persona ($300)
+                    const deposit = res.deposit_paid ? (res.deposit_amount || 0) : 0;
+                    const estimatedSpend = (res.party_size || 2) * 300;
+                    dailyStats[res.date].revenue += deposit + estimatedSpend;
+                }
+            }
+        });
+
+        // Formatear para frontend
+        const weeklyData = Object.entries(dailyStats).map(([date, stats]) => ({
+            day: new Date(date).toLocaleDateString('es-MX', { weekday: 'short' }),
+            date,
+            occupancy: Math.min(Math.round(stats.occupancy), 100),
+            reservations: stats.reservations,
+            revenue: stats.revenue
+        }));
+
+        res.json({ success: true, data: weeklyData });
+    } catch (error) {
+        console.error('Reportes error:', error);
+        res.status(500).json({ success: false, error: 'Error al generar reportes' });
+    }
+});
+
+// ============================================
+// 🤖 IA SUGERENCIAS
+// ============================================
+
+/**
+ * GET /api/admin/ia-sugerencias
+ * Genera sugerencias basadas en reglas
+ */
+router.get('/ia-sugerencias', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+
+        // 1. Analizar ocupación reciente
+        const today = new Date().toISOString().split('T')[0];
+        const { count: reservasHoy } = await supabaseAdmin
+            .from('reservations')
+            .select('*', { count: 'exact', head: true })
+            .eq('restaurant_id', restaurantId)
+            .eq('date', today);
+
+        // 2. Analizar opiniones bajas
+        const { data: lowReviews } = await supabaseAdmin
+            .from('reviews')
+            .select('rating, comment')
+            .eq('restaurant_id', restaurantId)
+            .lt('rating', 3)
+            .limit(5);
+
+        const suggestions = [];
+
+        // Regla 1: Ocupación baja hoy
+        if ((reservasHoy || 0) < 5) {
+            suggestions.push({
+                id: 'auto-1',
+                category: 'marketing',
+                title: 'Baja ocupación hoy',
+                description: 'Tienes pocas reservas para hoy. Considera lanzar una "Oferta Flash" del 15% para atraer comensales de última hora.',
+                priority: 'alta',
+                confidence: 90,
+                estimatedImpact: '+5-10 reservas',
+                actionLabel: 'Crear oferta',
+                isApplied: false,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        // Regla 2: Ocupación alta (futura mejora)
+        if ((reservasHoy || 0) > 20) {
+            suggestions.push({
+                id: 'auto-2',
+                category: 'operacion',
+                title: 'Alta demanda detectada',
+                description: 'Hoy será un día ocupado. Asegúrate de tener personal suficiente en cocina y sala.',
+                priority: 'media',
+                confidence: 85,
+                estimatedImpact: 'Mejora servicio',
+                actionLabel: 'Ver staff',
+                isApplied: false,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        // Regla 3: Reviews negativas recientes
+        if (lowReviews && lowReviews.length > 0) {
+            suggestions.push({
+                id: 'auto-3',
+                category: 'calidad',
+                title: 'Atención a críticas recientes',
+                description: `Tienes ${lowReviews.length} reseñas recientes con baja calificación. Es vital responderles para mantener tu reputación.`,
+                priority: 'alta',
+                confidence: 95,
+                estimatedImpact: 'Retención clientes',
+                actionLabel: 'Ver opiniones',
+                isApplied: false,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        // Sugerencia Default si no hay nada crítico
+        if (suggestions.length === 0) {
+            suggestions.push({
+                id: 'auto-def',
+                category: 'general',
+                title: 'Todo marcha bien',
+                description: 'Tu restaurante opera dentro de parámetros normales. ¡Sigue así!',
+                priority: 'baja',
+                confidence: 100,
+                estimatedImpact: 'Estabilidad',
+                actionLabel: 'Ver dashboard',
+                isApplied: false,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        res.json({ success: true, data: suggestions });
+    } catch (error) {
+        console.error('IA Sugerencias error:', error);
+        res.status(500).json({ success: false, error: 'Error al generar sugerencias' });
     }
 });
 

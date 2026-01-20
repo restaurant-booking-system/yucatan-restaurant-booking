@@ -42,6 +42,7 @@ const RestaurantSettingsPage = () => {
         toleranceMinutes: '15',
         requireDeposit: restaurant?.hasDeposit || false,
         depositAmount: '200',
+        depositHours: ['19:00', '19:30', '20:00', '20:30', '21:00'] as string[],
         autoConfirm: false,
         sendReminders: true,
         reminderHours: '24',
@@ -49,6 +50,7 @@ const RestaurantSettingsPage = () => {
 
     useEffect(() => {
         if (restaurant) {
+            const settings = (restaurant as any).settings || {};
             setFormState(prev => ({
                 ...prev,
                 name: restaurant.name || prev.name,
@@ -58,11 +60,25 @@ const RestaurantSettingsPage = () => {
                 image: restaurant.image || prev.image,
                 openTime: restaurant.openTime || prev.openTime,
                 closeTime: restaurant.closeTime || prev.closeTime,
-                maxPartySize: restaurant.maxGuestCount?.toString() || prev.maxPartySize,
-                requireDeposit: restaurant.hasDeposit || prev.requireDeposit,
+                maxPartySize: settings.maxPartySize?.toString() || prev.maxPartySize,
+                requireDeposit: settings.depositRequired || prev.requireDeposit,
+                depositAmount: settings.depositAmount?.toString() || prev.depositAmount,
+                depositHours: settings.depositHours || prev.depositHours,
             }));
         }
     }, [restaurant]);
+
+    const toggleDepositHour = (hour: string) => {
+        setFormState(prev => ({
+            ...prev,
+            depositHours: prev.depositHours.includes(hour)
+                ? prev.depositHours.filter(h => h !== hour)
+                : [...prev.depositHours, hour].sort()
+        }));
+    };
+
+    // Available time slots for deposit hour selection
+    const availableHours = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'];
 
     const handleSave = async () => {
         if (!restaurant?.id) return;
@@ -80,6 +96,10 @@ const RestaurantSettingsPage = () => {
                     closeTime: formState.closeTime,
                     maxGuestCount: parseInt(formState.maxPartySize),
                     hasDeposit: formState.requireDeposit,
+                    depositAmount: parseInt(formState.depositAmount) || 200,
+                    depositHours: formState.depositHours,
+                    // Pass current settings for proper JSONB merge
+                    settings: (restaurant as any).settings || {},
                 }
             });
             toast.success('Configuración guardada correctamente');
@@ -288,12 +308,22 @@ const RestaurantSettingsPage = () => {
                                         </div>
                                     </div>
                                     <div className="p-4 bg-muted/40 rounded-xl border">
-                                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-muted-foreground">Horarios con depósito</p>
+                                        <p className="text-xs font-bold uppercase tracking-widest mb-3 text-muted-foreground">Horarios con depósito (clic para activar/desactivar)</p>
                                         <div className="flex flex-wrap gap-2">
-                                            {['19:00', '19:30', '20:00', '20:30', '21:00'].map(t => (
-                                                <Badge key={t} className="bg-background text-foreground border h-8 px-3">{t}</Badge>
+                                            {availableHours.map(t => (
+                                                <button
+                                                    key={t}
+                                                    onClick={() => toggleDepositHour(t)}
+                                                    className={cn(
+                                                        "h-8 px-3 rounded-full text-sm font-medium transition-colors border",
+                                                        formState.depositHours.includes(t)
+                                                            ? "bg-primary text-primary-foreground border-primary"
+                                                            : "bg-background text-muted-foreground border-border hover:border-primary/50"
+                                                    )}
+                                                >
+                                                    {t}
+                                                </button>
                                             ))}
-                                            <Button variant="ghost" size="sm" className="h-8 border-dashed border-2">Editar...</Button>
                                         </div>
                                     </div>
                                 </motion.div>

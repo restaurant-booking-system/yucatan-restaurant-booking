@@ -21,13 +21,14 @@ build
 # ============================================
 # ENVIRONMENT VARIABLES (IMPORTANTE)
 # ============================================
-# .env
+.env
 .env.local
 .env.*.local
 .env.development
 .env.production
-# backend/.env
-# *.env
+backend/.env
+*.env
+
 
 # ============================================
 # DOCKER

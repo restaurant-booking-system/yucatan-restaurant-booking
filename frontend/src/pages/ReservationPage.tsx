@@ -10,6 +10,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import TableMap from '@/components/TableMap';
 import TimeSlotPicker from '@/components/TimeSlotPicker';
+import StripePaymentModal from '@/components/StripePaymentModal';
 import { useRestaurant, useAvailableTables, useTimeSlots, useCreateReservation } from '@/hooks/useData';
 import { Table } from '@/types';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ const ReservationPage = () => {
   const [specialRequest, setSpecialRequest] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Auto-scroll to bottom when a table is selected to show the "Continue" button
   useEffect(() => {
@@ -128,8 +130,16 @@ const ReservationPage = () => {
     );
   }
 
-  const requiresDeposit = selectedTime ? timeSlots.find(s => s.time === selectedTime)?.requiresDeposit : false;
-  const depositAmount = selectedTime ? timeSlots.find(s => s.time === selectedTime)?.depositAmount : 0;
+  // Find selected time slot and check if deposit is required
+  const selectedSlot = selectedTime ? timeSlots.find(s => s.time === selectedTime) : null;
+  const requiresDeposit = selectedSlot?.requiresDeposit || false;
+  const depositAmount = selectedSlot?.depositAmount || 0;
+
+  // Debug: log deposit info
+  console.log('TimeSlots:', timeSlots);
+  console.log('Selected time:', selectedTime);
+  console.log('Selected slot:', selectedSlot);
+  console.log('Requires deposit:', requiresDeposit, 'Amount:', depositAmount);
 
   const handleNext = () => {
     const steps: ReservationStep[] = ['date', 'time', 'table', 'details', 'confirm'];
@@ -153,6 +163,19 @@ const ReservationPage = () => {
       return;
     }
 
+    // If deposit is required, open payment modal first
+    if (requiresDeposit && depositAmount && depositAmount > 0) {
+      setShowPaymentModal(true);
+      return;
+    }
+
+    // No deposit required, create reservation directly
+    await createReservationDirectly();
+  };
+
+  const createReservationDirectly = async (depositPaid = false) => {
+    if (!user || !selectedMesa || !selectedDate || !selectedTime) return;
+
     setIsSubmitting(true);
     try {
       await createReservation.mutateAsync({
@@ -162,9 +185,11 @@ const ReservationPage = () => {
         date: dateStr,
         time: selectedTime,
         guestCount: guestCount,
-        status: 'pending',
+        status: depositPaid ? 'confirmed' : 'pending',
         specialRequest: specialRequest || undefined,
         occasion: selectedOccasion || undefined,
+        depositPaid,
+        depositAmount: depositPaid ? depositAmount : 0,
       });
       toast.success('¡Reserva creada exitosamente!');
       setIsConfirmed(true);
@@ -174,6 +199,11 @@ const ReservationPage = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    createReservationDirectly(true);
   };
 
   const canProceed = () => {
@@ -522,6 +552,21 @@ const ReservationPage = () => {
           </div>
         </div>
       </main>
+
+      {/* Stripe Payment Modal */}
+      <StripePaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={handlePaymentSuccess}
+        amount={depositAmount || 0}
+        restaurantName={restaurant.name}
+        reservationData={{
+          restaurantId: id!,
+          date: dateStr,
+          time: selectedTime || '',
+          guestCount,
+        }}
+      />
 
       <Footer />
     </div>

@@ -451,6 +451,14 @@ export const useAISuggestions = (restaurantId: string | undefined) => {
     });
 };
 
+export const useReports = (period: 'week' | 'month' | 'quarter') => {
+    return useQuery({
+        queryKey: ['dashboard', 'reports', period],
+        queryFn: () => dashboardService.getReports(period),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+};
+
 // ============================================
 // UTILITY HOOKS
 // ============================================

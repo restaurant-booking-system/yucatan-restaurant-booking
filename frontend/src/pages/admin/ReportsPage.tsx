@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, TrendingUp, TrendingDown, Users, Calendar, DollarSign, Clock, PieChart, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,28 +7,22 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { cn } from '@/lib/utils';
-import { useDashboardMetrics, useRestaurantOffers, useRestaurantReservations } from '@/hooks/useData';
+import { useDashboardMetrics, useRestaurantOffers, useRestaurantReservations, useReports } from '@/hooks/useData';
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 
 const ReportsPage = () => {
     const { restaurant } = useRestaurantAuth();
     const restaurantId = restaurant?.id;
 
+    const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
     const { data: metrics, isLoading: isMetricsLoading } = useDashboardMetrics(restaurantId);
     const { data: offers = [], isLoading: isOffersLoading } = useRestaurantOffers(restaurantId);
+    const { data: reports = [], isLoading: isReportsLoading } = useReports(period);
 
-    // Fallback static data for charts if API doesn't provide historical data yet
-    const weeklyData = [
-        { day: 'Lun', occupancy: 65, reservations: 42 },
-        { day: 'Mar', occupancy: 58, reservations: 38 },
-        { day: 'Mié', occupancy: 70, reservations: 45 },
-        { day: 'Jue', occupancy: 75, reservations: 52 },
-        { day: 'Vie', occupancy: 92, reservations: 78 },
-        { day: 'Sáb', occupancy: 98, reservations: 95 },
-        { day: 'Dom', occupancy: 82, reservations: 68 },
-    ];
+    // Use real data or empty array if loading
+    const weeklyData = reports;
 
-    if (isMetricsLoading || isOffersLoading) {
+    if (isMetricsLoading || isOffersLoading || isReportsLoading) {
         return (
             <AdminLayout>
                 <div className="flex items-center justify-center h-64">
@@ -58,7 +53,7 @@ const ReportsPage = () => {
                         <p className="text-muted-foreground">Análisis de la operación y eficiencia de tu restaurante</p>
                     </div>
                     <div className="flex gap-2">
-                        <Select defaultValue="month">
+                        <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
                             <SelectTrigger className="w-40">
                                 <Calendar className="w-4 h-4 mr-2" />
                                 <SelectValue />

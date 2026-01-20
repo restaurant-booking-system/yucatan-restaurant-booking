@@ -17,6 +17,8 @@ import adminRouter from './routes/admin.js';
 import uploadRouter from './routes/upload.js';
 import verificationRouter from './routes/verification.js';
 import geocodeRouter from './routes/geocode.js';
+import tablesRouter from './routes/tables.js';
+import paymentsRouter from './routes/payments.js';
 
 // Create Express app
 const app = express();
@@ -92,7 +94,8 @@ app.use('/api/geocode', geocodeRouter);
 // app.use('/api/waitlist', waitlistRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/upload', uploadRouter);
-// app.use('/api/payments', paymentsRouter);
+app.use('/api/tables', tablesRouter);
+app.use('/api/payments', paymentsRouter);
 
 // ===========================================
 // ERROR HANDLING

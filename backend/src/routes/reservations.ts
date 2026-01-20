@@ -266,26 +266,21 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response) 
             return;
         }
 
-        // Update table status only for real-time operations (arrived/completed)
-        // We do NOT update table status for 'confirmed' because that would block the table for all future dates
+        // Update table status based on reservation status
         let tableStatus: string | null = null;
         switch (status) {
+            case 'confirmed':
+                // When reservation is confirmed, mark table as occupied/reserved
+                tableStatus = 'occupied';
+                break;
             case 'arrived':
                 tableStatus = 'occupied';
                 break;
             case 'completed':
             case 'cancelled':
             case 'no_show':
-                // Only free the table if it was occupied
-                const { data: currentTable } = await supabase
-                    .from('tables')
-                    .select('status')
-                    .eq('id', reservation.table_id)
-                    .single();
-
-                if (currentTable?.status === 'occupied') {
-                    tableStatus = 'available';
-                }
+                // Free the table when reservation ends or is cancelled
+                tableStatus = 'available';
                 break;
         }
 
