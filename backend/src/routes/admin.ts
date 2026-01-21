@@ -171,6 +171,13 @@ router.patch('/reservas/:id/aceptar', async (req: Request, res: Response) => {
 
         if (error) throw error;
 
+        if (data && data.table_id) {
+            await supabaseAdmin
+                .from('tables')
+                .update({ status: 'reserved' })
+                .eq('id', data.table_id);
+        }
+
         res.json({ success: true, data, message: 'Reserva confirmada' });
     } catch (error) {
         console.error('Aceptar reserva error:', error);
@@ -203,6 +210,13 @@ router.patch('/reservas/:id/cancelar', async (req: Request, res: Response) => {
 
         if (error) throw error;
 
+        if (data && data.table_id) {
+            await supabaseAdmin
+                .from('tables')
+                .update({ status: 'available' })
+                .eq('id', data.table_id);
+        }
+
         res.json({ success: true, data, message: 'Reserva cancelada' });
     } catch (error) {
         console.error('Cancelar reserva error:', error);
@@ -232,6 +246,13 @@ router.patch('/reservas/:id/checkin', async (req: Request, res: Response) => {
             .single();
 
         if (error) throw error;
+
+        if (data && data.table_id) {
+            await supabaseAdmin
+                .from('tables')
+                .update({ status: 'occupied' })
+                .eq('id', data.table_id);
+        }
 
         res.json({ success: true, data, message: 'Check-in registrado' });
     } catch (error) {
@@ -1152,4 +1173,481 @@ router.delete('/usuarios/:id', async (req: Request, res: Response) => {
     }
 });
 
+// ============================================
+// ⚙️ CONFIGURACIÓN / SETTINGS
+// ============================================
+
+/**
+ * GET /api/admin/settings
+ * Obtiene configuración del restaurante
+ */
+router.get('/settings', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+
+        const { data: restaurant, error } = await supabaseAdmin
+            .from('restaurants')
+            .select('settings, opening_hours, name, description, phone, address')
+            .eq('id', restaurantId)
+            .single();
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            data: {
+                ...restaurant.settings,
+                opening_hours: restaurant.opening_hours,
+                name: restaurant.name,
+                description: restaurant.description,
+                phone: restaurant.phone,
+                address: restaurant.address
+            }
+        });
+    } catch (error) {
+        console.error('Settings error:', error);
+        res.status(500).json({ success: false, error: 'Error al cargar configuración' });
+    }
+});
+
+/**
+ * PATCH /api/admin/settings
+ * Actualiza configuración del restaurante
+ */
+router.patch('/settings', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+        const {
+            depositRequired,
+            depositAmount,
+            depositHours,
+            reservationDuration,
+            maxGuestsPerReservation,
+            advanceBookingDays,
+            opening_hours,
+            name,
+            description,
+            phone,
+            address
+        } = req.body;
+
+        const updates: any = {};
+
+        // Build settings object
+        const settings: any = {};
+        if (typeof depositRequired !== 'undefined') settings.depositRequired = depositRequired;
+        if (typeof depositAmount !== 'undefined') settings.depositAmount = depositAmount;
+        if (depositHours) settings.depositHours = depositHours;
+        if (reservationDuration) settings.reservationDuration = reservationDuration;
+        if (maxGuestsPerReservation) settings.maxGuestsPerReservation = maxGuestsPerReservation;
+        if (advanceBookingDays) settings.advanceBookingDays = advanceBookingDays;
+
+        if (Object.keys(settings).length > 0) {
+            // Merge with existing settings
+            const { data: existing } = await supabaseAdmin
+                .from('restaurants')
+                .select('settings')
+                .eq('id', restaurantId)
+                .single();
+
+            updates.settings = { ...(existing?.settings || {}), ...settings };
+        }
+
+        if (opening_hours) updates.opening_hours = opening_hours;
+        if (name) updates.name = name;
+        if (description) updates.description = description;
+        if (phone) updates.phone = phone;
+        if (address) updates.address = address;
+
+        const { data, error } = await supabaseAdmin
+            .from('restaurants')
+            .update(updates)
+            .eq('id', restaurantId)
+            .select('settings, opening_hours, name, description, phone, address')
+            .single();
+
+        if (error) throw error;
+
+        res.json({
+            success: true,
+            data: {
+                ...data.settings,
+                opening_hours: data.opening_hours,
+                name: data.name,
+                description: data.description,
+                phone: data.phone,
+                address: data.address
+            },
+            message: 'Configuración actualizada'
+        });
+    } catch (error) {
+        console.error('Update settings error:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar configuración' });
+    }
+});
+
+// ============================================
+// 🤖 AI SUGGESTIONS
+// ============================================
+
+/**
+ * GET /api/admin/ai-suggestions
+ * Obtiene sugerencias generadas por IA
+ */
+router.get('/ai-suggestions', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+        const apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
+
+        // Get recent data for analysis
+        const { data: recentReservations } = await supabaseAdmin
+            .from('reservations')
+            .select('date, time, guest_count, status')
+            .eq('restaurant_id', restaurantId)
+            .gte('date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+            .limit(100);
+
+        const { data: reviews } = await supabaseAdmin
+            .from('reviews')
+            .select('rating, comment')
+            .eq('restaurant_id', restaurantId)
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        // 1. Try Real AI (if key exists)
+        if (apiKey) {
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-3.5-turbo",
+                        messages: [
+                            {
+                                role: "system",
+                                content: "You are a restaurant consultant. Analyze the data and provide 3 actionable suggestions in JSON format: [{id, type (optimization|alert|success|warning|info), title, description, priority (high|medium|low), actionLabel}]. Return ONLY raw JSON."
+                            },
+                            {
+                                role: "user",
+                                content: `Reservations: ${JSON.stringify(recentReservations?.slice(0, 20))}. Reviews: ${JSON.stringify(reviews)}. Generate unique insights.`
+                            }
+                        ],
+                        temperature: 0.7
+                    })
+                });
+
+                const json = await response.json() as any;
+                if (json.choices && json.choices[0]?.message?.content) {
+                    const content = json.choices[0].message.content;
+                    // Try to parse JSON from AI response
+                    const parsed = JSON.parse(content.replace(/```json/g, '').replace(/```/g, '').trim());
+                    if (Array.isArray(parsed)) {
+                        res.json({ success: true, data: parsed });
+                        return;
+                    }
+                }
+            } catch (aiError) {
+                console.error('Real AI failed, falling back to heuristics:', aiError);
+            }
+        }
+
+        // 2. Fallback: Heuristic Logic (Mock)
+        const suggestions = [];
+
+        // Check for peak hours
+        const hourCounts: Record<string, number> = {};
+        recentReservations?.forEach((r: any) => {
+            const hour = r.time?.substring(0, 2);
+            if (hour) hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+        });
+
+        const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0];
+        if (peakHour && peakHour[1] > 5) {
+            suggestions.push({
+                id: 'peak-hours',
+                type: 'optimization',
+                title: 'Horario Pico Identificado',
+                description: `Las ${peakHour[0]}:00 es tu hora más popular. Considera agregar personal extra.`,
+                priority: 'medium',
+                actionLabel: 'Ver horarios'
+            });
+        }
+
+        // Check for no-shows
+        const noShows = recentReservations?.filter((r: any) => r.status === 'no_show').length || 0;
+        if (noShows > 3) {
+            suggestions.push({
+                id: 'no-shows',
+                type: 'alert',
+                title: 'Reducir No-Shows',
+                description: `Has tenido ${noShows} no-shows este mes. Considera activar anticipos para horarios premium.`,
+                priority: 'high',
+                actionLabel: 'Configurar anticipos'
+            });
+        }
+
+        // Check average rating
+        const avgRating = reviews?.length ? reviews.reduce((sum: any, r: any) => sum + r.rating, 0) / reviews.length : 0;
+        if (avgRating >= 4.5) {
+            suggestions.push({
+                id: 'reviews',
+                type: 'success',
+                title: 'Excelentes Reseñas',
+                description: `¡Tu calificación promedio es ${avgRating.toFixed(1)}! Considera promocionar esto en redes sociales.`,
+                priority: 'low',
+                actionLabel: 'Ver reseñas'
+            });
+        } else if (avgRating > 0 && avgRating < 4) {
+            suggestions.push({
+                id: 'improve-rating',
+                type: 'warning',
+                title: 'Mejorar Calificación',
+                description: `Tu calificación promedio es ${avgRating.toFixed(1)}. Revisa los comentarios recientes para identificar áreas de mejora.`,
+                priority: 'high',
+                actionLabel: 'Ver comentarios'
+            });
+        }
+
+        // Default suggestions if none generated
+        if (suggestions.length === 0) {
+            suggestions.push({
+                id: 'welcome',
+                type: 'info',
+                title: 'Bienvenido a Mesa Feliz',
+                description: 'A medida que recibas más reservas, te daremos sugerencias personalizadas para mejorar tu negocio.',
+                priority: 'low',
+                actionLabel: 'Explorar'
+            });
+        }
+
+        res.json({ success: true, data: suggestions });
+    } catch (error) {
+        console.error('AI Suggestions error:', error);
+        res.status(500).json({ success: false, error: 'Error al generar sugerencias' });
+    }
+});
+
+// ============================================
+// ⏳ LISTA DE ESPERA / WAITLIST
+// ============================================
+
+/**
+ * GET /api/admin/waitlist
+ * Obtiene lista de espera del día
+ */
+router.get('/waitlist', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+        const today = new Date().toISOString().split('T')[0];
+
+        const { data: waitlist, error } = await supabaseAdmin
+            .from('waitlist')
+            .select(`
+                *,
+                users:user_id (id, name, phone)
+            `)
+            .eq('restaurant_id', restaurantId)
+            .eq('date', today)
+            .order('created_at', { ascending: true });
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        res.json({ success: true, data: waitlist || [] });
+    } catch (error) {
+        console.error('Waitlist error:', error);
+        res.status(500).json({ success: false, error: 'Error al cargar lista de espera' });
+    }
+});
+
+// ============================================
+// 📈 REPORTES
+// ============================================
+
+/**
+ * GET /api/admin/reportes
+ * Obtiene datos para reportes (semanal, mensual, trimestral)
+ */
+router.get('/reportes', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+        const { period = 'month' } = req.query;
+
+        // Calculate date range
+        const now = new Date();
+        const startDate = new Date();
+
+        if (period === 'week') {
+            startDate.setDate(now.getDate() - 7);
+        } else if (period === 'quarter') {
+            startDate.setMonth(now.getMonth() - 3);
+        } else {
+            // Default to month
+            startDate.setMonth(now.getMonth() - 1);
+        }
+
+        const { data: reservations, error } = await supabaseAdmin
+            .from('reservations')
+            .select('date, guest_count, status')
+            .eq('restaurant_id', restaurantId)
+            .gte('date', startDate.toISOString().split('T')[0])
+            .lte('date', now.toISOString().split('T')[0]);
+
+        if (error) throw error;
+
+        // Process data
+        const daysMap = new Map<string, { reservations: number; guests: number }>();
+
+        // Initialize days
+        const loopDate = new Date(startDate);
+        while (loopDate <= now) {
+            const dateStr = loopDate.toISOString().split('T')[0];
+            const dayName = loopDate.toLocaleDateString('es-ES', { weekday: 'short' });
+            // Format: "Lun 20"
+            const label = `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${loopDate.getDate()}`;
+
+            daysMap.set(dateStr, { reservations: 0, guests: 0 });
+            loopDate.setDate(loopDate.getDate() + 1);
+        }
+
+        // Fill with data
+        reservations?.forEach((r: any) => {
+            if (daysMap.has(r.date)) {
+                const day = daysMap.get(r.date)!;
+                day.reservations++;
+                day.guests += r.guest_count || 0;
+            }
+        });
+
+        // Calculate occupancy (assuming simplistic max capacity of 100 for now)
+        // TODO: Get real capacity from sum of tables
+        const MAX_CAPACITY = 100;
+
+        const reportData = Array.from(daysMap.entries()).map(([date, stats]) => {
+            const dateObj = new Date(date);
+            const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'short' });
+            return {
+                day: `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} ${dateObj.getDate()}`,
+                reservations: stats.reservations,
+                occupancy: Math.min(Math.round((stats.guests / MAX_CAPACITY) * 100), 100)
+            };
+        });
+
+        res.json({ success: true, data: reportData });
+    } catch (error) {
+        console.error('Reports error:', error);
+        res.status(500).json({ success: false, error: 'Error al generar reportes' });
+    }
+});
+
+/**
+ * POST /api/admin/waitlist
+ * Agrega cliente a lista de espera
+ */
+router.post('/waitlist', async (req: Request, res: Response) => {
+    try {
+        const restaurantId = (req as any).user?.restaurantId;
+        const { name, phone, party_size, notes } = req.body;
+        const today = new Date().toISOString().split('T')[0];
+
+        const { data, error } = await supabaseAdmin
+            .from('waitlist')
+            .insert({
+                restaurant_id: restaurantId,
+                name,
+                phone,
+                party_size: party_size || 2,
+                notes,
+                date: today,
+                status: 'waiting',
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json({ success: true, data, message: 'Cliente agregado a lista de espera' });
+    } catch (error) {
+        console.error('Add to waitlist error:', error);
+        res.status(500).json({ success: false, error: 'Error al agregar a lista de espera' });
+    }
+});
+
+/**
+ * PATCH /api/admin/waitlist/:id
+ * Actualiza estado de entrada en lista de espera
+ */
+router.patch('/waitlist/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const restaurantId = (req as any).user?.restaurantId;
+        const { status, table_id } = req.body;
+
+        const updates: any = { status };
+        if (status === 'seated') {
+            updates.seated_at = new Date().toISOString();
+            if (table_id) updates.table_id = table_id;
+        } else if (status === 'notified') {
+            updates.notified_at = new Date().toISOString();
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from('waitlist')
+            .update(updates)
+            .eq('id', id)
+            .eq('restaurant_id', restaurantId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // If seated and table assigned, mark table as occupied
+        if (status === 'seated' && (table_id || data.table_id)) {
+            const tableIdToUpdate = table_id || data.table_id;
+            if (tableIdToUpdate) {
+                await supabaseAdmin
+                    .from('tables')
+                    .update({ status: 'occupied' })
+                    .eq('id', tableIdToUpdate);
+            }
+        }
+
+
+        if (error) throw error;
+
+        res.json({ success: true, data, message: 'Estado actualizado' });
+    } catch (error) {
+        console.error('Update waitlist error:', error);
+        res.status(500).json({ success: false, error: 'Error al actualizar' });
+    }
+});
+
+/**
+ * DELETE /api/admin/waitlist/:id
+ * Elimina entrada de lista de espera
+ */
+router.delete('/waitlist/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const restaurantId = (req as any).user?.restaurantId;
+
+        const { error } = await supabaseAdmin
+            .from('waitlist')
+            .delete()
+            .eq('id', id)
+            .eq('restaurant_id', restaurantId);
+
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Eliminado de lista de espera' });
+    } catch (error) {
+        console.error('Delete waitlist error:', error);
+        res.status(500).json({ success: false, error: 'Error al eliminar' });
+    }
+});
+
 export default router;
+

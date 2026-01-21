@@ -1,155 +1,169 @@
+/**
+ * Email Service
+ * Handles sending emails for verification, reservations, and notifications.
+ */
 import nodemailer from 'nodemailer';
 import { google } from 'googleapis';
 
-const OAuth2 = google.auth.OAuth2;
+// Configuration
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
+const SMTP_USER = process.env.SMTP_USER || process.env.GMAIL_USER;
+const SMTP_PASS = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD; // Support App Password
 
-// Gmail OAuth2 configuration
-const oauth2Client = new OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground'
-);
+// Gmail OAuth specific
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
 
-oauth2Client.setCredentials({
-    refresh_token: process.env.GMAIL_REFRESH_TOKEN
-});
+let transporter: nodemailer.Transporter | null = null;
 
-async function createTransporter() {
+const createTransporter = async () => {
+    if (transporter) return transporter;
+
     try {
-        const accessToken = await oauth2Client.getAccessToken();
+        // Option 1: Gmail OAuth2 (If configured)
+        if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN && SMTP_USER) {
+            const OAuth2 = google.auth.OAuth2;
+            const oauth2Client = new OAuth2(
+                GMAIL_CLIENT_ID,
+                GMAIL_CLIENT_SECRET,
+                "https://developers.google.com/oauthplayground"
+            );
 
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                type: 'OAuth2',
-                user: process.env.GMAIL_USER,
-                clientId: process.env.GMAIL_CLIENT_ID,
-                clientSecret: process.env.GMAIL_CLIENT_SECRET,
-                refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-                accessToken: accessToken.token || ''
-            }
+            oauth2Client.setCredentials({
+                refresh_token: GMAIL_REFRESH_TOKEN
+            });
+
+            const accessToken = await oauth2Client.getAccessToken();
+
+            transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    type: 'OAuth2',
+                    user: SMTP_USER,
+                    clientId: GMAIL_CLIENT_ID,
+                    clientSecret: GMAIL_CLIENT_SECRET,
+                    refreshToken: GMAIL_REFRESH_TOKEN,
+                    accessToken: accessToken.token as string,
+                },
+            });
+            console.log('📧 Email Service: Configured with Gmail OAuth2');
+            return transporter;
+        }
+
+        // Option 2: Standard SMTP (Gmail App Password, SendGrid, Resend, etc.)
+        if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+            transporter = nodemailer.createTransport({
+                host: SMTP_HOST,
+                port: SMTP_PORT,
+                secure: SMTP_PORT === 465, // true for 465, false for other ports
+                auth: {
+                    user: SMTP_USER,
+                    pass: SMTP_PASS,
+                },
+            });
+            console.log(`📧 Email Service: Configured with SMTP (${SMTP_HOST})`);
+            return transporter;
+        }
+
+        console.log('⚠️ Email Service: No credentials found. Emails will be logged to console (Dev Mode).');
+        return null;
+    } catch (error) {
+        console.error('❌ Email Service Configuration Error:', error);
+        return null;
+    }
+};
+
+interface SendMailOptions {
+    to: string;
+    subject: string;
+    html: string;
+}
+
+// Result type
+interface EmailResult {
+    success: boolean;
+    error?: any;
+}
+
+const sendMail = async ({ to, subject, html }: SendMailOptions): Promise<EmailResult> => {
+    try {
+        const mailTransport = await createTransporter();
+
+        if (!mailTransport) {
+            // Dev Mode Fallback
+            console.log(`\n════════════════ [EMAIL MOCK] ════════════════`);
+            console.log(`To: ${to}`);
+            console.log(`Subject: ${subject}`);
+            console.log(`Body (truncated): ${html.substring(0, 100)}...`);
+            console.log(`══════════════════════════════════════════════\n`);
+            return { success: true };
+        }
+
+        const info = await mailTransport.sendMail({
+            from: `"${process.env.RESTAURANT_NAME || 'Mesa Feliz'}" <${SMTP_USER}>`,
+            to,
+            subject,
+            html,
         });
 
-        return transporter;
-    } catch (error) {
-        console.error('Error creating email transporter:', error);
-        throw error;
+        console.log(`📧 Email sent to ${to}: ${info.messageId}`);
+        return { success: true };
+    } catch (error: any) {
+        console.error(`❌ Failed to send email to ${to}:`, error);
+        return { success: false, error: error.message || error };
     }
-}
+};
 
-interface SendVerificationCodeOptions {
-    to: string;
-    code: string;
-}
+// Public Methods
 
-export async function sendVerificationCode({ to, code }: SendVerificationCodeOptions): Promise<boolean> {
-    try {
-        const transporter = await createTransporter();
-
-        const mailOptions = {
-            from: `Mesa Feliz <${process.env.GMAIL_USER}>`,
-            to: to,
-            subject: '🔐 Código de verificación - Mesa Feliz',
-            html: `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        
-        <!-- Header -->
-        <div style="background: linear-gradient(135deg, #1a5a3e 0%, #2d8a5e 100%); padding: 30px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🍽️ Mesa Feliz</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">
-                Sistema de Reservaciones
-            </p>
-        </div>
-        
-        <!-- Content -->
-        <div style="padding: 40px 30px;">
-            <h2 style="color: #333; margin: 0 0 20px 0; font-size: 22px; text-align: center;">
-                Verifica tu correo electrónico
-            </h2>
-            
-            <p style="color: #666; font-size: 16px; line-height: 1.6; text-align: center;">
-                Usa el siguiente código para verificar tu cuenta:
-            </p>
-            
-            <!-- Code Box -->
-            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; padding: 25px; text-align: center; margin: 25px 0; border: 2px dashed #1a5a3e;">
-                <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1a5a3e; font-family: 'Courier New', monospace;">
-                    ${code}
-                </span>
+export async function sendVerificationCode({ to, code }: { to: string; code: string }): Promise<EmailResult> {
+    const subject = `Tu código de verificación: ${code}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #e11d48;">Mesa Feliz</h2>
+            <p>Hola,</p>
+            <p>Usa el siguiente código para verificar tu cuenta:</p>
+            <div style="background: #f4f4f5; padding: 15px; border-radius: 8px; font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 5px; margin: 20px 0;">
+                ${code}
             </div>
-            
-            <p style="color: #999; font-size: 14px; text-align: center; margin: 20px 0 0 0;">
-                ⏰ Este código expira en <strong>10 minutos</strong>
-            </p>
-            
-            <p style="color: #999; font-size: 13px; text-align: center; margin: 25px 0 0 0; padding-top: 20px; border-top: 1px solid #eee;">
-                Si no solicitaste este código, puedes ignorar este correo.
-            </p>
+            <p>Este código expirará en 10 minutos.</p>
         </div>
-        
-        <!-- Footer -->
-        <div style="background-color: #f8f9fa; padding: 20px; text-align: center;">
-            <p style="color: #999; font-size: 12px; margin: 0;">
-                © 2024 Mesa Feliz - Todos los derechos reservados
-            </p>
-        </div>
-    </div>
-</body>
-</html>
-            `,
-        };
-
-        const result = await transporter.sendMail(mailOptions);
-        console.log('✅ Email sent successfully:', result.messageId);
-        return true;
-    } catch (error) {
-        console.error('Error sending verification email:', error);
-        return false;
-    }
+    `;
+    return sendMail({ to, subject, html });
 }
 
-export async function sendWelcomeEmail(to: string, restaurantName: string): Promise<boolean> {
-    try {
-        const transporter = await createTransporter();
-
-        const mailOptions = {
-            from: `Mesa Feliz <${process.env.GMAIL_USER}>`,
-            to: to,
-            subject: `🎉 ¡Bienvenido a Mesa Feliz, ${restaurantName}!`,
-            html: `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden;">
-        <div style="background: linear-gradient(135deg, #1a5a3e 0%, #2d8a5e 100%); padding: 30px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0;">🍽️ Mesa Feliz</h1>
+export async function sendWelcomeEmail(to: string, restaurantName: string): Promise<EmailResult> {
+    const subject = `¡Bienvenido a ${restaurantName}!`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h1>Bienvenido a ${restaurantName}</h1>
+            <p>Gracias por registrarte en nuestra plataforma.</p>
+            <p>Ahora puedes realizar reservas de mesa de manera rápida y sencilla.</p>
+            <a href="${process.env.FRONTEND_URL || '#'}" style="display: inline-block; background: #e11d48; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">
+                Ir al sitio
+            </a>
         </div>
-        <div style="padding: 40px 30px; text-align: center;">
-            <h2 style="color: #333;">¡Bienvenido, ${restaurantName}!</h2>
-            <p style="color: #666;">Tu restaurante ha sido registrado exitosamente.</p>
-            <p style="color: #666;">Ya puedes comenzar a recibir reservaciones.</p>
-        </div>
-    </div>
-</body>
-</html>
-            `,
-        };
+    `;
+    return sendMail({ to, subject, html });
+}
 
-        const result = await transporter.sendMail(mailOptions);
-        console.log('✅ Welcome email sent:', result.messageId);
-        return true;
-    } catch (error) {
-        console.error('Error sending welcome email:', error);
-        return false;
-    }
+export async function sendReservationConfirmation(to: string, reservation: any): Promise<EmailResult> {
+    const date = new Date(reservation.date).toLocaleDateString();
+    const subject = `Reserva Confirmada - ${date}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #10b981;">¡Reserva Confirmada!</h2>
+            <p>Tu reserva ha sido confirmada exitosamente.</p>
+            <ul style="background: #f0fdf4; padding: 20px; border-radius: 8px; list-style: none;">
+                <li><strong>Fecha:</strong> ${date}</li>
+                <li><strong>Hora:</strong> ${reservation.time}</li>
+                <li><strong>Personas:</strong> ${reservation.guestCount}</li>
+                <li><strong>Mesa:</strong> ${reservation.tableId ? 'Asignada' : 'Pendiente de asignar'}</li>
+            </ul>
+            <p>Por favor, presenta este correo al llegar.</p>
+        </div>
+    `;
+    return sendMail({ to, subject, html });
 }

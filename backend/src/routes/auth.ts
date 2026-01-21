@@ -26,7 +26,7 @@ router.post('/customer/register', async (req: Request, res: Response) => {
         }
 
         // Check if user already exists in public.users
-        const { data: existingUser } = await supabase
+        const { data: existingUser } = await supabaseAdmin
             .from('users')
             .select('id')
             .eq('email', email.toLowerCase())

@@ -31,7 +31,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { cn } from '@/lib/utils';
 import { useTables, useUpdateTableStatus, useCreateTable, useUpdateTable, useDeleteTable } from '@/hooks/useData';
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
-import { Table, TableStatus } from '@/types';
+import { Table, TableStatus, TableZone } from '@/types';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -73,22 +73,35 @@ const TableMapOperativePage = () => {
     const [zoom, setZoom] = useState(1);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedZone, setSelectedZone] = useState<TableZone>('main');
+
+    // Modal de creación de mesa
+    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+    const [newTableNumber, setNewTableNumber] = useState('');
+    const [newTableCapacity, setNewTableCapacity] = useState(4);
+    const [newTableShape, setNewTableShape] = useState<'round' | 'square'>('round');
+    const [newTableZone, setNewTableZone] = useState<TableZone>('main');
 
     // Local state for form editing (to avoid re-render loops)
     const [editNumber, setEditNumber] = useState('');
     const [editCapacity, setEditCapacity] = useState(4);
     const [editShape, setEditShape] = useState<'round' | 'square'>('round');
+    const [editZone, setEditZone] = useState<TableZone>('main');
 
-    // Map area constraints for drag
+    // Map area constraints for drag - ahora con padding interno
     const mapWidth = 700;
     const mapHeight = 500;
     const tableSize = 60;
+    const mapPadding = 20;
+
+    // Filtrar mesas por zona seleccionada
+    const filteredMesas = adminMesas.filter(m => (m.zone || 'main') === selectedZone);
 
     const stats = {
-        disponibles: adminMesas.filter(m => m.status === 'disponible').length,
-        ocupadas: adminMesas.filter(m => m.status === 'ocupada').length,
-        reservadas: adminMesas.filter(m => m.status === 'reservada').length,
-        pendientes: adminMesas.filter(m => m.status === 'pendiente').length,
+        disponibles: filteredMesas.filter(m => m.status === 'disponible').length,
+        ocupadas: filteredMesas.filter(m => m.status === 'ocupada').length,
+        reservadas: filteredMesas.filter(m => m.status === 'reservada').length,
+        pendientes: filteredMesas.filter(m => m.status === 'pendiente').length,
     };
 
     const totalCapacity = adminMesas.reduce((sum, m) => sum + m.capacity, 0);
@@ -118,6 +131,7 @@ const TableMapOperativePage = () => {
         setEditNumber(mesa.number);
         setEditCapacity(mesa.capacity);
         setEditShape(mesa.shape as 'round' | 'square');
+        setEditZone((mesa.zone || 'main') as TableZone);
         setIsDialogOpen(true);
     };
 
@@ -141,8 +155,15 @@ const TableMapOperativePage = () => {
     const handleDragEnd = async (mesa: AdminTable, info: any) => {
         if (!isEditMode) return;
 
-        const newX = Math.round(mesa.x + info.offset.x / zoom);
-        const newY = Math.round(mesa.y + info.offset.y / zoom);
+        // Calcular nueva posición con límites estrictos
+        let newX = Math.round(mesa.x + info.offset.x / zoom);
+        let newY = Math.round(mesa.y + info.offset.y / zoom);
+
+        // Aplicar límites para mantener la mesa dentro del área
+        const maxX = mapWidth - tableSize - mapPadding;
+        const maxY = mapHeight - tableSize - mapPadding;
+        newX = Math.max(mapPadding, Math.min(newX, maxX));
+        newY = Math.max(mapPadding, Math.min(newY, maxY));
 
         try {
             await updateTableMutation.mutateAsync({
@@ -155,26 +176,69 @@ const TableMapOperativePage = () => {
         }
     };
 
-    const handleAddTable = async () => {
+    // Abrir modal de creación de mesa
+    const handleOpenCreateDialog = () => {
+        const nextNumber = adminMesas.length > 0
+            ? Math.max(...adminMesas.map(m => parseInt(String(m.number)) || 0)) + 1
+            : 1;
+        setNewTableNumber(nextNumber.toString());
+        setNewTableCapacity(4);
+        setNewTableShape('round');
+        setNewTableZone(selectedZone); // Usar zona actual como default
+        setIsCreateDialogOpen(true);
+    };
+
+    // Calcular posición que evite superposición
+    const calculateNewPosition = () => {
+        const zoneMesas = adminMesas.filter(m => (m.zone || 'main') === newTableZone);
+        // Posición en grid para evitar superposición
+        const gridCols = Math.floor((mapWidth - mapPadding * 2) / (tableSize + 20));
+        const index = zoneMesas.length;
+        const col = index % gridCols;
+        const row = Math.floor(index / gridCols);
+        const x = mapPadding + col * (tableSize + 20) + 20;
+        const y = mapPadding + row * (tableSize + 20) + 60; // offset por decoraciones
+        // Mantener dentro de límites
+        return {
+            x: Math.min(x, mapWidth - tableSize - mapPadding),
+            y: Math.min(y, mapHeight - tableSize - mapPadding)
+        };
+    };
+
+    const handleCreateTable = async () => {
         if (!restaurantId) return;
 
-        const nextNumber = adminMesas.length > 0
-            ? Math.max(...adminMesas.map(m => parseInt(m.number) || 0)) + 1
-            : 1;
+        const { x, y } = calculateNewPosition();
 
         try {
             await createTableMutation.mutateAsync({
                 restaurantId,
-                number: nextNumber.toString(),
-                capacity: 4,
-                shape: 'round',
-                x: 100,
-                y: 100
+                number: newTableNumber,
+                capacity: newTableCapacity,
+                shape: newTableShape,
+                zone: newTableZone,
+                x,
+                y
             });
-            toast.success('Mesa agregada');
+            toast.success(`Mesa ${newTableNumber} agregada a ${getZoneName(newTableZone)}`);
+            setIsCreateDialogOpen(false);
+            // Si la mesa se crea en otra zona, cambiar a esa zona
+            if (newTableZone !== selectedZone) {
+                setSelectedZone(newTableZone);
+            }
             refetch();
         } catch (err) {
             toast.error('Error al agregar mesa');
+        }
+    };
+
+    // Helper para nombres de zona en español
+    const getZoneName = (zone: TableZone) => {
+        switch (zone) {
+            case 'main': return 'Principal';
+            case 'terrace': return 'Terraza';
+            case 'vip': return 'VIP';
+            default: return zone;
         }
     };
 
@@ -296,7 +360,7 @@ const TableMapOperativePage = () => {
                             </Button>
                         )}
                         {isEditMode && (
-                            <Button size="sm" className="gap-2" onClick={handleAddTable} disabled={createTableMutation.isPending}>
+                            <Button size="sm" className="gap-2" onClick={handleOpenCreateDialog} disabled={createTableMutation.isPending}>
                                 {createTableMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                                 Agregar Mesa
                             </Button>
@@ -328,7 +392,7 @@ const TableMapOperativePage = () => {
                 <div className="flex items-center justify-between bg-card rounded-xl p-4 shadow-card">
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-muted-foreground">Planta:</span>
-                        <Select defaultValue="main">
+                        <Select value={selectedZone} onValueChange={(v) => setSelectedZone(v as TableZone)}>
                             <SelectTrigger className="w-32">
                                 <Grid3X3 className="w-4 h-4 mr-2" />
                                 <SelectValue />
@@ -406,27 +470,27 @@ const TableMapOperativePage = () => {
                         </div>
 
                         {/* Tables */}
-                        {adminMesas.length === 0 && !isLoading && isEditMode && (
+                        {filteredMesas.length === 0 && !isLoading && isEditMode && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl bg-muted/20">
                                 <Layout className="w-12 h-12 text-muted-foreground mb-4 opacity-20" />
-                                <p className="text-muted-foreground font-medium">El mapa está vacío</p>
-                                <Button variant="outline" className="mt-4" onClick={handleSeedTables}>
-                                    Generar diseño base
+                                <p className="text-muted-foreground font-medium">No hay mesas en {getZoneName(selectedZone)}</p>
+                                <Button variant="outline" className="mt-4" onClick={handleOpenCreateDialog}>
+                                    Agregar primera mesa
                                 </Button>
                             </div>
                         )}
 
-                        {adminMesas.map((mesa) => (
+                        {filteredMesas.map((mesa) => (
                             <Tooltip key={mesa.id}>
                                 <TooltipTrigger asChild>
                                     <motion.div
                                         drag={isEditMode}
                                         dragMomentum={false}
                                         dragConstraints={{
-                                            left: -((mesa.x || 0) + 40),
-                                            right: mapWidth - (mesa.x || 0) - (mesa.width || tableSize) - 40,
-                                            top: -((mesa.y || 0) + 60),
-                                            bottom: mapHeight - (mesa.y || 0) - (mesa.height || tableSize) - 60
+                                            left: -(mesa.x || 0),
+                                            right: mapWidth - (mesa.x || 0) - (mesa.width || tableSize),
+                                            top: -(mesa.y || 0),
+                                            bottom: mapHeight - (mesa.y || 0) - (mesa.height || tableSize)
                                         }}
                                         onDragStart={handleDragStart}
                                         onDragEnd={(_, info) => handleDragEnd(mesa, info)}
@@ -659,6 +723,92 @@ const TableMapOperativePage = () => {
                                 </DialogFooter>
                             </>
                         )}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Modal de Creación de Mesa */}
+                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Plus className="w-5 h-5 text-primary" />
+                                Agregar Nueva Mesa
+                            </DialogTitle>
+                            <DialogDescription>
+                                Configura los detalles de la nueva mesa
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Número de Mesa</Label>
+                                    <Input
+                                        value={newTableNumber}
+                                        onChange={(e) => setNewTableNumber(e.target.value)}
+                                        placeholder="Ej: 15"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Capacidad (personas)</Label>
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        value={newTableCapacity}
+                                        onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 1)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Forma</Label>
+                                    <Select
+                                        value={newTableShape}
+                                        onValueChange={(v) => setNewTableShape(v as 'round' | 'square')}
+                                    >
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="round">🔵 Redonda</SelectItem>
+                                            <SelectItem value="square">🟩 Cuadrada</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Zona / Área</Label>
+                                    <Select
+                                        value={newTableZone}
+                                        onValueChange={(v) => setNewTableZone(v as TableZone)}
+                                    >
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="main">🏠 Principal</SelectItem>
+                                            <SelectItem value="terrace">🌿 Terraza</SelectItem>
+                                            <SelectItem value="vip">⭐ VIP</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleCreateTable}
+                                disabled={createTableMutation.isPending || !newTableNumber}
+                                className="gap-2"
+                            >
+                                {createTableMutation.isPending ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Plus className="w-4 h-4" />
+                                )}
+                                Crear Mesa
+                            </Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </div>

@@ -35,19 +35,19 @@ router.post('/send-code', async (req: Request, res: Response) => {
         console.log(`📧 Attempting to send email via Gmail...`);
 
         // Send real email using Gmail
-        const emailSent = await sendVerificationCode({ to: email, code });
+        const result = await sendVerificationCode({ to: email, code });
 
-        if (emailSent) {
+        if (result.success) {
             console.log(`✅ Email sent successfully to ${email}`);
             res.json({
                 success: true,
                 message: 'Código de verificación enviado a tu correo'
             });
         } else {
-            console.error(`❌ Failed to send email to ${email}`);
+            console.error(`❌ Failed to send email to ${email}:`, result.error);
             res.status(500).json({
                 success: false,
-                error: 'No se pudo enviar el correo. Verifica que el email sea válido.'
+                error: `No se pudo enviar el correo: ${result.error?.message || JSON.stringify(result.error) || 'Error desconocido'}`
             });
         }
 
@@ -158,12 +158,13 @@ router.post('/resend-code', async (req: Request, res: Response) => {
         console.log(`📧 Resent verification code for ${email}: ${code}`);
 
         // Send real email using Resend
-        const emailSent = await sendVerificationCode({ to: email, code });
+        const result = await sendVerificationCode({ to: email, code });
 
         res.json({
             success: true,
-            message: emailSent ? 'Nuevo código enviado a tu correo' : 'Código generado',
-            devCode: code
+            message: result.success ? 'Nuevo código enviado a tu correo' : 'Código generado (Error al enviar email)',
+            devCode: code,
+            error: result.error
         });
 
     } catch (error) {

@@ -46,13 +46,6 @@ const ClientLoginPage = () => {
     const [registerPassword, setRegisterPassword] = useState('');
     const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
 
-    // Email verification state
-    const [emailVerified, setEmailVerified] = useState(false);
-    const [showVerifyModal, setShowVerifyModal] = useState(false);
-    const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
-    const [isSendingCode, setIsSendingCode] = useState(false);
-    const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-    const [verifyError, setVerifyError] = useState('');
 
     // Get the redirect path from location state or default to home
     const from = (location.state as { from?: string })?.from || '/';
@@ -87,114 +80,7 @@ const ClientLoginPage = () => {
         setIsLoading(false);
     };
 
-    // Email verification functions
-    const handleSendVerificationCode = async () => {
-        if (!registerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registerEmail)) {
-            toast({
-                title: 'Error',
-                description: 'Ingresa un correo electrónico válido',
-                variant: 'destructive',
-            });
-            return;
-        }
 
-        setIsSendingCode(true);
-        try {
-            const response = await fetch(`${API_BASE_URL}/verification/send-code`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: registerEmail })
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                setShowVerifyModal(true);
-                setVerifyError('');
-                toast({
-                    title: '¡Código enviado!',
-                    description: 'Revisa tu correo electrónico',
-                });
-            } else {
-                toast({
-                    title: 'Error',
-                    description: data.error || 'Error al enviar código',
-                    variant: 'destructive',
-                });
-            }
-        } catch (error) {
-            console.error('Error sending verification code:', error);
-            toast({
-                title: 'Error',
-                description: 'Error al enviar el código',
-                variant: 'destructive',
-            });
-        } finally {
-            setIsSendingCode(false);
-        }
-    };
-
-    const handleVerifyCode = async () => {
-        const code = verificationCode.join('');
-        if (code.length !== 6) {
-            setVerifyError('Ingresa el código completo');
-            return;
-        }
-
-        setIsVerifyingCode(true);
-        setVerifyError('');
-        try {
-            const response = await fetch(`${API_BASE_URL}/verification/verify-code`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: registerEmail, code })
-            });
-            const data = await response.json();
-
-            if (data.success && data.verified) {
-                setEmailVerified(true);
-                setShowVerifyModal(false);
-                toast({
-                    title: '¡Correo verificado!',
-                    description: 'Tu correo ha sido verificado exitosamente',
-                });
-            } else {
-                setVerifyError(data.error || 'Código incorrecto');
-            }
-        } catch (error) {
-            console.error('Error verifying code:', error);
-            setVerifyError('Error al verificar el código');
-        } finally {
-            setIsVerifyingCode(false);
-        }
-    };
-
-    const handleCodeInput = (index: number, value: string) => {
-        if (value.length > 1) value = value.slice(-1);
-        if (!/^\d*$/.test(value)) return;
-
-        const newCode = [...verificationCode];
-        newCode[index] = value;
-        setVerificationCode(newCode);
-
-        // Auto-focus next input
-        if (value && index < 5) {
-            const nextInput = document.getElementById(`client-code-${index + 1}`);
-            nextInput?.focus();
-        }
-    };
-
-    const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
-        if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
-            const prevInput = document.getElementById(`client-code-${index - 1}`);
-            prevInput?.focus();
-        }
-    };
-
-    const handleResendCode = async () => {
-        setVerificationCode(['', '', '', '', '', '']);
-        setVerifyError('');
-        await handleSendVerificationCode();
-    };
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -218,11 +104,7 @@ const ClientLoginPage = () => {
             return;
         }
 
-        // If email not verified, send verification code
-        if (!emailVerified) {
-            await handleSendVerificationCode();
-            return;
-        }
+
 
         // Email verified, proceed with registration
         setIsLoading(true);
@@ -485,29 +367,11 @@ const ClientLoginPage = () => {
                                                     type="email"
                                                     placeholder="tu@email.com"
                                                     value={registerEmail}
-                                                    onChange={(e) => {
-                                                        setRegisterEmail(e.target.value);
-                                                        if (emailVerified) setEmailVerified(false);
-                                                    }}
-                                                    disabled={emailVerified}
-                                                    className={`pl-10 h-11 bg-muted/30 ${emailVerified ? 'pr-10 bg-green-50 border-green-500' : ''}`}
+                                                    onChange={(e) => setRegisterEmail(e.target.value)}
+                                                    className="pl-10 h-11 bg-muted/30"
                                                     required
                                                 />
-                                                {emailVerified && (
-                                                    <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-600" />
-                                                )}
                                             </div>
-                                            {emailVerified && (
-                                                <p className="text-xs text-green-600 flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3" />
-                                                    Correo verificado correctamente
-                                                </p>
-                                            )}
-                                            {!emailVerified && (
-                                                <p className="text-xs text-muted-foreground">
-                                                    Se verificará al crear la cuenta
-                                                </p>
-                                            )}
                                         </div>
 
                                         <div className="space-y-2">
@@ -569,9 +433,9 @@ const ClientLoginPage = () => {
                                             type="submit"
                                             className="w-full h-11 text-base shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all font-semibold"
                                             size="lg"
-                                            disabled={isLoading || isSendingCode}
+                                            disabled={isLoading}
                                         >
-                                            {isLoading ? 'Creando cuenta...' : isSendingCode ? 'Enviando código...' : emailVerified ? 'Crear cuenta' : 'Verificar correo y crear cuenta'}
+                                            {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
                                         </Button>
                                     </form>
                                 </div>
@@ -579,66 +443,10 @@ const ClientLoginPage = () => {
                         </Tabs>
                     </motion.div>
                 </div>
-            </div>
+            </div >
 
-            {/* Email Verification Modal */}
-            <Dialog open={showVerifyModal} onOpenChange={setShowVerifyModal}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-center">Verifica tu correo</DialogTitle>
-                        <DialogDescription className="text-center">
-                            Enviamos un código de 6 dígitos a<br />
-                            <strong>{registerEmail}</strong>
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-6 py-4">
-                        {/* 6-digit code input */}
-                        <div className="flex justify-center gap-2">
-                            {verificationCode.map((digit, index) => (
-                                <Input
-                                    key={index}
-                                    id={`client-code-${index}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={1}
-                                    value={digit}
-                                    onChange={(e) => handleCodeInput(index, e.target.value)}
-                                    onKeyDown={(e) => handleCodeKeyDown(index, e)}
-                                    className="w-12 h-14 text-center text-2xl font-bold"
-                                />
-                            ))}
-                        </div>
-
-                        {verifyError && (
-                            <p className="text-sm text-destructive text-center">{verifyError}</p>
-                        )}
-
-                        <Button
-                            onClick={handleVerifyCode}
-                            disabled={isVerifyingCode || verificationCode.join('').length !== 6}
-                            className="w-full"
-                        >
-                            {isVerifyingCode ? (
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            ) : (
-                                <Check className="w-4 h-4 mr-2" />
-                            )}
-                            Verificar código
-                        </Button>
-
-                        <button
-                            type="button"
-                            onClick={handleResendCode}
-                            disabled={isSendingCode}
-                            className="w-full text-sm text-primary hover:underline disabled:opacity-50"
-                        >
-                            {isSendingCode ? 'Enviando...' : '¿No recibiste el código? Reenviar'}
-                        </button>
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
+            {/* Email Verification Modal Removed */}
+        </div >
     );
 };
 

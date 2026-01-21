@@ -226,6 +226,18 @@ export const useConfirmArrival = () => {
     });
 };
 
+export const useCompleteService = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (reservationId: string) => reservationService.completeService(reservationId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['reservations'] });
+            queryClient.invalidateQueries({ queryKey: ['tables'] });
+        },
+    });
+};
+
 // ============================================
 // OFFER HOOKS
 // ============================================
@@ -409,8 +421,8 @@ export const useUpdateWaitlistStatus = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ entryId, status }: { entryId: string; status: WaitlistEntry['status'] }) =>
-            waitlistService.updateStatus(entryId, status),
+        mutationFn: ({ entryId, status, tableId }: { entryId: string; status: WaitlistEntry['status']; tableId?: string }) =>
+            waitlistService.updateStatus(entryId, status, tableId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['waitlist'] });
         },

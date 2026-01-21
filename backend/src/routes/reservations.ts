@@ -26,6 +26,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
             guestCount,
             occasion,
             specialRequest,
+            depositPaid,
+            depositAmount,
         } = req.body;
 
         // Validate required fields
@@ -72,8 +74,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
                 guest_count: guestCount,
                 occasion: occasion || null,
                 special_request: specialRequest || null,
-                status: 'pending',
-                deposit_paid: false,
+                status: depositPaid ? 'confirmed' : 'pending',
+                deposit_paid: depositPaid || false,
+                deposit_amount: depositAmount || null,
+                deposit_paid_at: depositPaid ? new Date().toISOString() : null,
                 qr_code: qrCode,
             })
             .select()
@@ -400,7 +404,7 @@ router.post('/:id/arrive', authMiddleware, async (req: Request, res: Response) =
     try {
         const { id } = req.params;
 
-        const { data: updatedReservation, error } = await supabase
+        const { data: updatedReservation, error } = await supabaseAdmin
             .from('reservations')
             .update({
                 status: 'arrived',
@@ -420,7 +424,7 @@ router.post('/:id/arrive', authMiddleware, async (req: Request, res: Response) =
         }
 
         // Update table status
-        await supabase
+        await supabaseAdmin
             .from('tables')
             .update({ status: 'occupied' })
             .eq('id', updatedReservation.table_id);
@@ -432,6 +436,71 @@ router.post('/:id/arrive', authMiddleware, async (req: Request, res: Response) =
         });
     } catch (error) {
         console.error('Arrive reservation error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+        });
+    }
+});
+
+/**
+ * POST /api/reservations/:id/complete
+ * Mark reservation as completed and free the table
+ */
+router.post('/:id/complete', authMiddleware, async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        // Get the reservation first to get table_id
+        const { data: reservation, error: fetchError } = await supabaseAdmin
+            .from('reservations')
+            .select('*, tables(id)')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !reservation) {
+            res.status(404).json({
+                success: false,
+                error: 'Reservation not found',
+            });
+            return;
+        }
+
+        // Update reservation status to completed
+        const { data: updatedReservation, error } = await supabaseAdmin
+            .from('reservations')
+            .update({
+                status: 'completed',
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error completing reservation:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Error completing reservation',
+            });
+            return;
+        }
+
+        // Free the table
+        if (reservation.table_id) {
+            await supabaseAdmin
+                .from('tables')
+                .update({ status: 'available' })
+                .eq('id', reservation.table_id);
+        }
+
+        res.json({
+            success: true,
+            data: updatedReservation,
+            message: 'Service completed successfully',
+        });
+    } catch (error) {
+        console.error('Complete reservation error:', error);
         res.status(500).json({
             success: false,
             error: 'Internal server error',

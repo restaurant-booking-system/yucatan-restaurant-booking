@@ -32,23 +32,42 @@ async function apiCall<T>(
 ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
 
-    // Get auth token - try restaurant session first, then user session
+    // Get auth token - smart selection based on endpoint
     let token = null;
 
-    // Check for restaurant session (for admin/restaurant operations)
-    const restaurantSession = localStorage.getItem('mesafeliz_restaurant_session');
-    if (restaurantSession) {
-        try {
-            const session = JSON.parse(restaurantSession);
-            token = session.token;
-        } catch (e) {
-            console.error('Error parsing restaurant session:', e);
+    // Determine if this is an admin/restaurant operation based on endpoint
+    const isAdminOperation = endpoint.includes('/restaurants/') &&
+        (options?.method === 'PATCH' || options?.method === 'PUT' || options?.method === 'DELETE');
+
+    if (isAdminOperation) {
+        // For admin operations, try restaurant session first
+        const restaurantSession = localStorage.getItem('mesafeliz_restaurant_session');
+        if (restaurantSession) {
+            try {
+                const session = JSON.parse(restaurantSession);
+                token = session.token;
+            } catch (e) {
+                console.error('Error parsing restaurant session:', e);
+            }
         }
     }
 
-    // Fallback to user token if no restaurant session
+    // If no token yet, try user token
     if (!token) {
         token = localStorage.getItem('mesafeliz_token');
+    }
+
+    // Final fallback to restaurant session if still no token
+    if (!token) {
+        const restaurantSession = localStorage.getItem('mesafeliz_restaurant_session');
+        if (restaurantSession) {
+            try {
+                const session = JSON.parse(restaurantSession);
+                token = session.token;
+            } catch (e) {
+                console.error('Error parsing restaurant session:', e);
+            }
+        }
     }
 
     // Extract headers from options to prevent overwriting
@@ -545,6 +564,13 @@ export const reservationService = {
     async markNoShow(reservationId: string): Promise<Reservation> {
         return this.updateStatus(reservationId, 'no_show');
     },
+
+    async completeService(reservationId: string): Promise<Reservation> {
+        const data = await apiCall<any>(`/reservations/${reservationId}/complete`, {
+            method: 'POST',
+        });
+        return transformReservation(data);
+    },
 };
 
 // ============================================
@@ -980,17 +1006,17 @@ export const waitlistService = {
         };
     },
 
-    async updateStatus(entryId: string, status: WaitlistEntry['status']): Promise<WaitlistEntry> {
+    async updateStatus(entryId: string, status: WaitlistEntry['status'], tableId?: string): Promise<WaitlistEntry> {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        const response = await fetch(`${API_BASE_URL}/admin/waitlist/${entryId}/atender`, {
+        const response = await fetch(`${API_BASE_URL}/admin/waitlist/${entryId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
                 ...(token && { 'Authorization': `Bearer ${token}` })
             },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, table_id: tableId }),
         });
         const json = await response.json();
         return json.data;
@@ -1012,8 +1038,8 @@ export const waitlistService = {
         return this.updateStatus(entryId, 'notified');
     },
 
-    async seat(entryId: string): Promise<WaitlistEntry> {
-        return this.updateStatus(entryId, 'seated');
+    async seat(entryId: string, tableId?: string): Promise<WaitlistEntry> {
+        return this.updateStatus(entryId, 'seated', tableId);
     },
 };
 
@@ -1060,7 +1086,7 @@ export const dashboardService = {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        const response = await fetch(`${API_BASE_URL}/admin/ia-sugerencias`, {
+        const response = await fetch(`${API_BASE_URL}/admin/ai-suggestions`, {
             headers: {
                 'Content-Type': 'application/json',
                 ...(token && { 'Authorization': `Bearer ${token}` })
@@ -1117,7 +1143,7 @@ export const settingsService = {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        const response = await fetch(`${API_BASE_URL}/admin/configuracion`, {
+        const response = await fetch(`${API_BASE_URL}/admin/settings`, {
             headers: {
                 'Content-Type': 'application/json',
                 ...(token && { 'Authorization': `Bearer ${token}` })
@@ -1136,8 +1162,8 @@ export const settingsService = {
         const session = localStorage.getItem('mesafeliz_restaurant_session');
         const token = session ? JSON.parse(session).token : null;
 
-        const response = await fetch(`${API_BASE_URL}/admin/configuracion`, {
-            method: 'PUT',
+        const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+            method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
                 ...(token && { 'Authorization': `Bearer ${token}` })

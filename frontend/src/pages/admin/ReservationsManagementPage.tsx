@@ -41,11 +41,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { cn } from '@/lib/utils';
-import { useRestaurantReservations, useUpdateReservationStatus } from '@/hooks/useData';
+import { useRestaurantReservations, useUpdateReservationStatus, useCompleteService } from '@/hooks/useData';
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 import { Reservation, ReservationStatus } from '@/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const ReservationsManagementPage = () => {
     const { restaurant } = useRestaurantAuth();
@@ -77,12 +78,35 @@ const ReservationsManagementPage = () => {
     });
 
     const updateStatusMutation = useUpdateReservationStatus();
+    const completeServiceMutation = useCompleteService();
 
     const handleStatusUpdate = async (reservationId: string, status: ReservationStatus) => {
         try {
             await updateStatusMutation.mutateAsync({ reservationId, status });
+
+            // Show success notification based on action
+            const messages: Record<string, string> = {
+                'confirmed': '✅ Reserva confirmada. El cliente ha sido notificado.',
+                'cancelled': '❌ Reserva cancelada exitosamente.',
+                'arrived': '🎉 Llegada registrada. ¡Bienvenido el cliente!',
+                'completed': '✓ Reserva completada.',
+                'no_show': '⚠️ Reserva marcada como no asistió.'
+            };
+
+            toast.success(messages[status] || `Estado actualizado a: ${status}`);
         } catch (err) {
             console.error('Error updating status:', err);
+            toast.error('Error al actualizar el estado de la reserva');
+        }
+    };
+
+    const handleCompleteService = async (reservationId: string) => {
+        try {
+            await completeServiceMutation.mutateAsync(reservationId);
+            toast.success('✅ Servicio completado. Mesa liberada.');
+        } catch (err) {
+            console.error('Error completing service:', err);
+            toast.error('Error al completar el servicio');
         }
     };
 
@@ -305,6 +329,15 @@ const ReservationsManagementPage = () => {
                                                                     >
                                                                         <Check className="w-4 h-4" />
                                                                         Marcar llegada
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {reservation.status === 'arrived' && (
+                                                                    <DropdownMenuItem
+                                                                        className="gap-2 text-success focus:text-success"
+                                                                        onClick={() => handleCompleteService(reservation.id)}
+                                                                    >
+                                                                        <Check className="w-4 h-4" />
+                                                                        Completar Servicio
                                                                     </DropdownMenuItem>
                                                                 )}
                                                                 {reservation.status !== 'cancelled' && (

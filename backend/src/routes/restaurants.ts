@@ -301,6 +301,85 @@ router.get('/:id/tables/available', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/restaurants/:id/timeslots
+ * Get available time slots for a specific date
+ */
+router.get('/:id/timeslots', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { date } = req.query;
+
+        if (!date) {
+            res.status(400).json({
+                success: false,
+                error: 'Date parameter is required',
+            });
+            return;
+        }
+
+        // Get restaurant settings
+        const { data: restaurant, error: restaurantError } = await supabase
+            .from('restaurants')
+            .select('settings, opening_hours')
+            .eq('id', id)
+            .single();
+
+        if (restaurantError || !restaurant) {
+            res.status(404).json({
+                success: false,
+                error: 'Restaurant not found',
+            });
+            return;
+        }
+
+        const settings = restaurant.settings || {};
+        const depositRequired = settings.depositRequired || false;
+        const depositAmount = settings.depositAmount || 200;
+        const depositHours = settings.depositHours || ['19:00', '19:30', '20:00', '20:30', '21:00'];
+
+        // Get existing reservations for this date to check availability
+        const { data: reservations } = await supabase
+            .from('reservations')
+            .select('time')
+            .eq('restaurant_id', id)
+            .eq('date', date)
+            .in('status', ['pending', 'confirmed', 'arrived']);
+
+        const reservedTimes = new Set(reservations?.map(r => r.time) || []);
+
+        // Generate time slots from 13:00 to 22:00 (every 30 minutes)
+        const timeSlots = [];
+        for (let hour = 13; hour <= 22; hour++) {
+            for (const minutes of ['00', '30']) {
+                if (hour === 22 && minutes === '30') continue; // Skip 22:30
+
+                const time = `${hour.toString().padStart(2, '0')}:${minutes}`;
+                const isDepositHour = depositRequired && depositHours.includes(time);
+
+                timeSlots.push({
+                    time,
+                    available: !reservedTimes.has(time + ':00') && !reservedTimes.has(time),
+                    requiresDeposit: isDepositHour,
+                    depositAmount: isDepositHour ? depositAmount : 0,
+                    isPeakHour: ['19:00', '19:30', '20:00', '20:30', '21:00'].includes(time),
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            data: timeSlots,
+        });
+    } catch (error) {
+        console.error('Timeslots route error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+        });
+    }
+});
+
+/**
  * GET /api/restaurants/:id/menu
  * Get menu items for a restaurant
  */
@@ -488,7 +567,8 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
             'address',
             'zone',
             'phone',
-            'email'
+            'email',
+            'settings'  // JSONB field containing depositAmount, depositHours, depositRequired, maxPartySize
         ];
 
         // Map frontend camelCase to database snake_case

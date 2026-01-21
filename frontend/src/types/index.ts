@@ -40,12 +40,15 @@ export interface RestaurantSettings {
 export type TableStatus = 'disponible' | 'ocupada' | 'reservada' | 'pendiente' | 'deshabilitada';
 export type TableShape = 'round' | 'square' | 'rectangle';
 
+export type TableZone = 'main' | 'terrace' | 'vip';
+
 export interface Table {
     id: string;
     restaurantId: string;
     number: number;
     capacity: number;
     status: TableStatus;
+    zone: TableZone;
     x: number;
     y: number;
     shape: TableShape;

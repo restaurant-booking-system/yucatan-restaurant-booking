@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { useWaitlist, useAddToWaitlist, useUpdateWaitlistStatus, useRemoveFromWaitlist } from '@/hooks/useData';
+import { useWaitlist, useAddToWaitlist, useUpdateWaitlistStatus, useRemoveFromWaitlist, useTables } from '@/hooks/useData';
 import { useRestaurantAuth } from '@/contexts/RestaurantAuthContext';
 import { WaitlistEntry } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -19,12 +19,19 @@ const WaitlistPage = () => {
     const { restaurant } = useRestaurantAuth();
     const restaurantId = restaurant?.id;
 
+    const { data: tables = [] } = useTables(restaurantId);
+    const availableTables = tables.filter(t => t.status === 'available');
+
+    // Missing hooks added here
     const { data: waitlist = [], isLoading } = useWaitlist(restaurantId);
     const addToWaitlistMutation = useAddToWaitlist();
     const updateStatusMutation = useUpdateWaitlistStatus();
     const removeMutation = useRemoveFromWaitlist();
 
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [isAssignTableOpen, setIsAssignTableOpen] = useState(false);
+    const [selectedCustomer, setSelectedCustomer] = useState<WaitlistEntry | null>(null);
+    const [selectedTableId, setSelectedTableId] = useState<string>('');
     const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', guests: '2' });
 
     const handleAddCustomer = async () => {
@@ -51,6 +58,28 @@ const WaitlistPage = () => {
             await updateStatusMutation.mutateAsync({ entryId: id, status });
         } catch (err) {
             console.error('Error updating waitlist status:', err);
+        }
+    };
+
+    const openAssignTable = (customer: WaitlistEntry) => {
+        setSelectedCustomer(customer);
+        setSelectedTableId('');
+        setIsAssignTableOpen(true);
+    };
+
+    const handleAssignTable = async () => {
+        if (!selectedCustomer || !selectedTableId) return;
+        try {
+            await updateStatusMutation.mutateAsync({
+                entryId: selectedCustomer.id,
+                status: 'seated',
+                tableId: selectedTableId
+            });
+            setIsAssignTableOpen(false);
+            setSelectedCustomer(null);
+            setSelectedTableId('');
+        } catch (err) {
+            console.error('Error assigning table:', err);
         }
     };
 
@@ -161,7 +190,7 @@ const WaitlistPage = () => {
                                             <Button
                                                 size="sm"
                                                 className="h-8 gap-2"
-                                                onClick={() => handleUpdateStatus(customer.id, 'seated')}
+                                                onClick={() => openAssignTable(customer)}
                                             >
                                                 <Check className="w-4 h-4" />
                                                 Asignar
@@ -197,6 +226,43 @@ const WaitlistPage = () => {
                             >
                                 {addToWaitlistMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
                                 Agregar
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={isAssignTableOpen} onOpenChange={setIsAssignTableOpen}>
+                    <DialogContent>
+                        <DialogHeader><DialogTitle>Asignar Mesa a {selectedCustomer?.name}</DialogTitle></DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <Label>Seleccionar Mesa Disponible</Label>
+                                <Select value={selectedTableId} onValueChange={setSelectedTableId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccione una mesa..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableTables.length > 0 ? (
+                                            availableTables.map(table => (
+                                                <SelectItem key={table.id} value={table.id}>
+                                                    Mesa {table.number} ({table.capacity} pers.) {table.zone ? `- ${table.zone}` : ''}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="none" disabled>No hay mesas disponibles</SelectItem>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsAssignTableOpen(false)}>Cancelar</Button>
+                            <Button
+                                onClick={handleAssignTable}
+                                disabled={!selectedTableId || updateStatusMutation.isPending}
+                            >
+                                {updateStatusMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                                Asignar y Sentar
                             </Button>
                         </DialogFooter>
                     </DialogContent>

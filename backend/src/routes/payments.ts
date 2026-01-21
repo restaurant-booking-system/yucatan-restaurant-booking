@@ -27,9 +27,13 @@ router.post('/create-intent', authMiddleware, async (req: Request, res: Response
             return;
         }
 
+        // Stripe MXN minimum is $10 MXN (1000 centavos)
+        const minimumAmount = 10;
+        const finalAmount = Math.max(amount, minimumAmount);
+
         // Create PaymentIntent
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: Math.round(amount * 100), // Stripe expects cents/centavos
+            amount: Math.round(finalAmount * 100), // Stripe expects cents/centavos
             currency,
             automatic_payment_methods: {
                 enabled: true,
@@ -131,8 +135,27 @@ router.post('/webhook', async (req: Request, res: Response) => {
         // Handle the event
         switch (event.type) {
             case 'payment_intent.succeeded':
-                const paymentIntent = event.data.object;
+                const paymentIntent = event.data.object as Stripe.PaymentIntent;
                 console.log(`💰 Payment succeeded: ${paymentIntent.id}`);
+
+                // Update reservation via webhook for reliability
+                const reservationId = paymentIntent.metadata?.reservationId;
+                if (reservationId) {
+                    try {
+                        await supabaseAdmin
+                            .from('reservations')
+                            .update({
+                                deposit_paid: true,
+                                deposit_paid_at: new Date().toISOString(),
+                                deposit_amount: paymentIntent.amount / 100,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', reservationId);
+                        console.log(`✅ Reservation ${reservationId} updated via webhook`);
+                    } catch (err) {
+                        console.error(`❌ Failed to update reservation ${reservationId} via webhook:`, err);
+                    }
+                }
                 break;
             case 'payment_intent.payment_failed':
                 const failedPayment = event.data.object;
