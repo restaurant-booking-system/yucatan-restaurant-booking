@@ -19,6 +19,7 @@ import verificationRouter from './routes/verification.js';
 import geocodeRouter from './routes/geocode.js';
 import tablesRouter from './routes/tables.js';
 import paymentsRouter from './routes/payments.js';
+import chatbotRouter from './routes/chatbot.js';
 
 // Create Express app
 const app = express();
@@ -96,6 +97,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/tables', tablesRouter);
 app.use('/api/payments', paymentsRouter);
+app.use('/api/chatbot', chatbotRouter);
 
 // ===========================================
 // ERROR HANDLING
