@@ -31,7 +31,6 @@ const menuItems = [
     { icon: Calendar, label: 'Reservas', path: '/admin/reservas', badge: '4' },
     { icon: Grid3X3, label: 'Mapa de Mesas', path: '/admin/mesas' },
     { icon: Users, label: 'Registro Llegada', path: '/admin/llegadas' },
-    { icon: ClipboardList, label: 'Lista de Espera', path: '/admin/espera' },
     { icon: Tag, label: 'Ofertas', path: '/admin/ofertas', badge: '2' },
     { icon: UtensilsCrossed, label: 'Menú Digital', path: '/admin/menu' },
     { icon: Star, label: 'Opiniones', path: '/admin/opiniones' },

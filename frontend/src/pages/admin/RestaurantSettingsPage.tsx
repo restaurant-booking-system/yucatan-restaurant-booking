@@ -24,7 +24,7 @@ const priceRanges = [
 ];
 
 const RestaurantSettingsPage = () => {
-    const { restaurant } = useRestaurantAuth();
+    const { restaurant, user } = useRestaurantAuth();
     const updateMutation = useUpdateRestaurant();
 
     const [formState, setFormState] = useState({
@@ -361,23 +361,22 @@ const RestaurantSettingsPage = () => {
                         <div className="bg-card rounded-2xl p-8 shadow-sm border space-y-6">
                             <div className="flex justify-between items-center">
                                 <h3 className="text-xl font-bold">Control de Acceso</h3>
-                                <Button variant="outline" size="sm" className="gap-2"><Plus className="w-4 h-4" />Agregar Staff</Button>
                             </div>
                             <div className="divide-y border rounded-xl overflow-hidden">
-                                <div className="flex items-center justify-between p-4 bg-background">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">JD</div>
-                                        <div><p className="font-bold text-sm">Juan Díaz</p><p className="text-xs text-muted-foreground">Administrador</p></div>
+                                {user && (
+                                    <div className="flex items-center justify-between p-4 bg-background">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
+                                                {user.name ? user.name.substring(0, 2).toUpperCase() : 'AD'}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-sm">{user.name}</p>
+                                                <p className="text-xs text-muted-foreground">Administrador</p>
+                                            </div>
+                                        </div>
+                                        <Badge>Titular</Badge>
                                     </div>
-                                    <Badge>Titular</Badge>
-                                </div>
-                                <div className="flex items-center justify-between p-4 bg-background">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary">AL</div>
-                                        <div><p className="font-bold text-sm">Ana López</p><p className="text-xs text-muted-foreground">Staff de Piso</p></div>
-                                    </div>
-                                    <Button variant="ghost" size="sm">Gestionar</Button>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </TabsContent>

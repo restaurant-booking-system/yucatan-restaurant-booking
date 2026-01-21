@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Users, Clock, RefreshCw, Grid3X3, ZoomIn, ZoomOut,
     Edit, Settings, Check, Layout, Trash2, Move, MousePointer2, Plus, ArrowRight
@@ -68,6 +68,16 @@ const TableMapOperativePage = () => {
         ...table,
     }));
 
+    // Local state for tables during editing (for smooth, lag-free dragging)
+    const [localMesas, setLocalMesas] = useState<AdminTable[]>([]);
+
+    // Initialize local state when data loads or edit mode starts
+    useEffect(() => {
+        if (tablesData.length > 0) {
+            setLocalMesas(tablesData.map(t => ({ ...t })));
+        }
+    }, [tablesData]);
+
     const [selectedMesa, setSelectedMesa] = useState<AdminTable | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [zoom, setZoom] = useState(1);
@@ -82,52 +92,116 @@ const TableMapOperativePage = () => {
     const [newTableShape, setNewTableShape] = useState<'round' | 'square'>('round');
     const [newTableZone, setNewTableZone] = useState<TableZone>('main');
 
-    // Local state for form editing (to avoid re-render loops)
+    // Local state for form editing
     const [editNumber, setEditNumber] = useState('');
     const [editCapacity, setEditCapacity] = useState(4);
     const [editShape, setEditShape] = useState<'round' | 'square'>('round');
     const [editZone, setEditZone] = useState<TableZone>('main');
 
-    // Map area constraints for drag - ahora con padding interno
+    // Map area constraints
     const mapWidth = 700;
     const mapHeight = 500;
     const tableSize = 60;
     const mapPadding = 20;
 
-    // Filtrar mesas por zona seleccionada
-    const filteredMesas = adminMesas.filter(m => (m.zone || 'main') === selectedZone);
+    // Use localMesas for rendering if we have them, otherwise fallback to prop data
+    // But primarily we want to render from localMesas to see immediate drag updates
+    const displayMesas = localMesas.length > 0 ? localMesas : adminMesas;
+    const filteredMesas = displayMesas.filter(m => (m.zone || 'main') === selectedZone);
 
     const stats = {
-        disponibles: filteredMesas.filter(m => m.status === 'disponible').length,
-        ocupadas: filteredMesas.filter(m => m.status === 'ocupada').length,
-        reservadas: filteredMesas.filter(m => m.status === 'reservada').length,
-        pendientes: filteredMesas.filter(m => m.status === 'pendiente').length,
+        disponibles: displayMesas.filter(m => m.status === 'disponible').length,
+        ocupadas: displayMesas.filter(m => m.status === 'ocupada').length,
+        reservadas: displayMesas.filter(m => m.status === 'reservada').length,
+        pendientes: displayMesas.filter(m => m.status === 'pendiente').length,
     };
 
-    const totalCapacity = adminMesas.reduce((sum, m) => sum + m.capacity, 0);
-    const currentGuests = adminMesas
+    const totalCapacity = displayMesas.reduce((sum, m) => sum + m.capacity, 0);
+    const currentGuests = displayMesas
         .filter(m => m.status === 'ocupada')
         .reduce((sum, m) => sum + (m.capacity || 0), 0);
 
     const getMesaClasses = (status: TableStatus) => {
-        const base = 'rounded-xl transition-all duration-300 cursor-pointer flex flex-col items-center justify-center font-semibold border-2 hover:scale-105';
+        const base = 'flex flex-col items-center justify-center transition-all duration-200 select-none';
         switch (status) {
             case 'disponible':
-                return `${base} bg-mesa-disponible border-success/50 text-white shadow-lg shadow-success/20`;
+                return `${base} bg-gradient-to-br from-indigo-500 to-indigo-600 border-indigo-400/50 text-white shadow-lg shadow-indigo-500/20`;
             case 'ocupada':
-                return `${base} bg-mesa-ocupada border-destructive/50 text-white shadow-lg shadow-destructive/20`;
+                return `${base} bg-gradient-to-br from-rose-500 to-rose-600 border-rose-400/50 text-white shadow-lg shadow-rose-500/20`;
             case 'pendiente':
-                return `${base} bg-mesa-pendiente border-warning/50 text-foreground shadow-lg shadow-warning/20 animate-pulse`;
+                return `${base} bg-gradient-to-br from-amber-400 to-amber-500 border-amber-300/50 text-white shadow-lg shadow-amber-500/20`;
             case 'reservada':
-                return `${base} bg-mesa-reservada border-primary/50 text-white shadow-lg shadow-primary/20`;
+                return `${base} bg-gradient-to-br from-emerald-500 to-emerald-600 border-emerald-400/50 text-white shadow-lg shadow-emerald-500/20`;
             default:
                 return base;
         }
     };
 
-    const handleMesaClick = (mesa: typeof adminMesas[0]) => {
+    // State for click-to-move interaction
+    const [movingTableId, setMovingTableId] = useState<string | null>(null);
+
+    const handleMesaClick = (mesa: AdminTable) => {
+        if (isEditMode) {
+            // In Edit Mode: Toggle selection for moving
+            if (movingTableId === mesa.id) {
+                setMovingTableId(null); // Deselect if already selected
+                toast.info("Mesa deseleccionada", { duration: 1000 });
+            } else {
+                setMovingTableId(mesa.id); // Select for moving
+                toast.info("Haz click en el mapa para mover la mesa", { duration: 2000 });
+            }
+            return;
+        }
+
+        // Normal Mode: Open Properties
         setSelectedMesa(mesa);
-        // Populate local edit state
+        setEditNumber(mesa.number);
+        setEditCapacity(mesa.capacity);
+        setEditShape(mesa.shape as 'round' | 'square');
+        setEditZone((mesa.zone || 'main') as TableZone);
+        setIsDialogOpen(true);
+    };
+
+    // CLICK-TO-MOVE HANDLER
+    const handleMapClick = (e: React.MouseEvent) => {
+        if (!isEditMode || !movingTableId || !mapRef.current) return;
+
+        // Calculate click position relative to the map container
+        const rect = mapRef.current.getBoundingClientRect();
+
+        // Calculate raw X/Y considering zoom
+        // (Click ClientX - Container Left) / Zoom
+        const rawX = (e.clientX - rect.left) / zoom;
+        const rawY = (e.clientY - rect.top) / zoom;
+
+        // Center the table on the click (assume standard size if unknown)
+        const currentTable = localMesas.find(t => t.id === movingTableId);
+        const tWidth = currentTable?.width || tableSize;
+        const tHeight = currentTable?.height || tableSize;
+
+        const centerX = rawX - (tWidth / 2);
+        const centerY = rawY - (tHeight / 2);
+
+        // STRICT CLAMPING
+        // Min: 0 (or padding)
+        // Max: MapWidth - TableWidth
+        const maxX = mapWidth - tWidth;
+        const maxY = mapHeight - tHeight;
+
+        const clampedX = Math.max(0, Math.min(centerX, maxX));
+        const clampedY = Math.max(0, Math.min(centerY, maxY));
+
+        // Update local state
+        setLocalMesas(prev => prev.map(t =>
+            t.id === movingTableId ? { ...t, x: clampedX, y: clampedY } : t
+        ));
+    };
+
+    // Special click handler for edit icons specifically
+    const handleEditIconClick = (e: React.MouseEvent, mesa: AdminTable) => {
+        e.stopPropagation();
+        // Allow opening properties even in edit mode via the icon
+        setSelectedMesa(mesa);
         setEditNumber(mesa.number);
         setEditCapacity(mesa.capacity);
         setEditShape(mesa.shape as 'round' | 'square');
@@ -137,44 +211,20 @@ const TableMapOperativePage = () => {
 
     const handleStatusChange = async (newStatus: TableStatus) => {
         if (!selectedMesa) return;
-
         try {
             await updateTableStatusMutation.mutateAsync({
                 tableId: selectedMesa.id,
                 status: newStatus
             });
-            toast.success(`Mesa ${selectedMesa.number} actualizada a ${newStatus}`);
+            toast.success(`Mesa ${selectedMesa.number} actualizada`);
             refetch();
             setIsDialogOpen(false);
         } catch (error) {
-            console.error('Error updating table status:', error);
-            toast.error('Error al actualizar el estado de la mesa');
+            toast.error('Error al actualizar estado');
         }
     };
 
-    const handleDragEnd = async (mesa: AdminTable, info: any) => {
-        if (!isEditMode) return;
 
-        // Calcular nueva posición con límites estrictos
-        let newX = Math.round(mesa.x + info.offset.x / zoom);
-        let newY = Math.round(mesa.y + info.offset.y / zoom);
-
-        // Aplicar límites para mantener la mesa dentro del área
-        const maxX = mapWidth - tableSize - mapPadding;
-        const maxY = mapHeight - tableSize - mapPadding;
-        newX = Math.max(mapPadding, Math.min(newX, maxX));
-        newY = Math.max(mapPadding, Math.min(newY, maxY));
-
-        try {
-            await updateTableMutation.mutateAsync({
-                tableId: mesa.id,
-                updates: { x: newX, y: newY }
-            });
-            refetch();
-        } catch (err) {
-            console.error('Error moving table:', err);
-        }
-    };
 
     // Abrir modal de creación de mesa
     const handleOpenCreateDialog = () => {
@@ -186,6 +236,16 @@ const TableMapOperativePage = () => {
         setNewTableShape('round');
         setNewTableZone(selectedZone); // Usar zona actual como default
         setIsCreateDialogOpen(true);
+    };
+
+    // Helper para nombres de zona en español
+    const getZoneName = (zone: TableZone) => {
+        switch (zone) {
+            case 'main': return 'Principal';
+            case 'terrace': return 'Terraza';
+            case 'vip': return 'VIP';
+            default: return zone;
+        }
     };
 
     // Calcular posición que evite superposición
@@ -232,16 +292,6 @@ const TableMapOperativePage = () => {
         }
     };
 
-    // Helper para nombres de zona en español
-    const getZoneName = (zone: TableZone) => {
-        switch (zone) {
-            case 'main': return 'Principal';
-            case 'terrace': return 'Terraza';
-            case 'vip': return 'VIP';
-            default: return zone;
-        }
-    };
-
     // Save table edits when clicking 'Listo'
     const handleSaveTableEdits = async () => {
         if (!selectedMesa) {
@@ -274,6 +324,46 @@ const TableMapOperativePage = () => {
 
         setIsDialogOpen(false);
     };
+
+    // Logic to save all changes when exiting edit mode
+    const handleToggleEditMode = async () => {
+        if (isEditMode) {
+            setMovingTableId(null); // Ensure nothing is selected
+            // Saving changes...
+            const updates = localMesas.filter(local => {
+                const original = tablesData.find(t => t.id === local.id);
+                if (!original) return false;
+                return local.x !== original.x || local.y !== original.y;
+            });
+
+            if (updates.length > 0) {
+                const toastId = toast.loading(`Guardando ${updates.length} cambios...`);
+                try {
+                    // Update sequentially to ensure consistency
+                    for (const table of updates) {
+                        await updateTableMutation.mutateAsync({
+                            tableId: table.id,
+                            updates: { x: table.x, y: table.y }
+                        });
+                    }
+                    toast.dismiss(toastId);
+                    toast.success('Diseño guardado correctamente');
+                    refetch();
+                } catch (err) {
+                    toast.dismiss(toastId);
+                    toast.error('Error al guardar algunos cambios');
+                }
+            }
+            setIsEditMode(false);
+        } else {
+            // Check if we have freshest data before starting edit
+            refetch().then(() => {
+                setLocalMesas(tablesData.map(t => ({ ...t })));
+                setIsEditMode(true);
+            });
+        }
+    };
+
 
     const handleDeleteTable = async () => {
         if (!selectedMesa) return;
@@ -327,6 +417,9 @@ const TableMapOperativePage = () => {
         return `${Math.floor(diff / 60)}h ${diff % 60}m`;
     };
 
+    // Ref for the map container to strictly constrain drag
+    const mapRef = useRef<HTMLDivElement>(null);
+
     return (
         <AdminLayout>
             <div className="space-y-6">
@@ -342,11 +435,23 @@ const TableMapOperativePage = () => {
                         <Button
                             variant={isEditMode ? "default" : "outline"}
                             size="sm"
-                            onClick={() => setIsEditMode(!isEditMode)}
-                            className="gap-2"
+                            onClick={handleToggleEditMode}
+                            className={cn(
+                                "gap-2 transition-all duration-300",
+                                isEditMode ? "bg-green-600 hover:bg-green-700 w-40" : ""
+                            )}
                         >
-                            {isEditMode ? <Layout className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                            {isEditMode ? 'Finalizar Diseño' : 'Configurar Mapa'}
+                            {isEditMode ? (
+                                <>
+                                    <Check className="w-4 h-4" />
+                                    Guardar Diseño
+                                </>
+                            ) : (
+                                <>
+                                    <Edit className="w-4 h-4" />
+                                    Configurar Mapa
+                                </>
+                            )}
                         </Button>
                         {!isEditMode && (
                             <Button
@@ -407,7 +512,7 @@ const TableMapOperativePage = () => {
                         {isEditMode && (
                             <div className="hidden md:flex items-center gap-2 border-l pl-4 ml-4">
                                 <MousePointer2 className="w-4 h-4 text-primary" />
-                                <span className="text-xs font-medium text-primary uppercase tracking-wider">Modo Edición</span>
+                                <span className="text-xs font-medium text-primary uppercase tracking-wider">Modo Edición: Haz clic en mesa para mover</span>
                             </div>
                         )}
                     </div>
@@ -431,52 +536,49 @@ const TableMapOperativePage = () => {
                 </div>
 
                 {/* Table Map */}
-                <div className="bg-card rounded-xl p-6 shadow-card overflow-auto">
+                <div className="bg-card rounded-xl p-6 shadow-card overflow-hidden border border-border/50">
                     <motion.div
-                        className="relative"
+                        ref={mapRef}
+                        onClick={handleMapClick}
+                        className={cn(
+                            "relative mx-auto bg-background/50 rounded-xl overflow-hidden shadow-inner",
+                            isEditMode && movingTableId ? "cursor-crosshair ring-2 ring-primary/20" : ""
+                        )}
                         style={{
                             transform: `scale(${zoom})`,
                             transformOrigin: 'top left',
                             width: `${mapWidth}px`,
                             height: `${mapHeight}px`,
-                            // Grid background pattern
+                            // Clean dot pattern background
                             backgroundImage: isEditMode
-                                ? 'linear-gradient(to right, hsl(var(--muted)) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--muted)) 1px, transparent 1px)'
-                                : 'none',
-                            backgroundSize: '40px 40px',
+                                ? 'radial-gradient(circle, hsl(var(--primary) / 0.2) 1px, transparent 1px)'
+                                : 'radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)',
+                            backgroundSize: '20px 20px',
                         }}
                     >
                         {/* Grid area indicator when in edit mode */}
                         {isEditMode && (
                             <div
-                                className="absolute inset-0 border-2 border-dashed border-primary/30 rounded-xl pointer-events-none"
+                                className="absolute inset-0 border-2 border-dashed border-primary/20 rounded-xl pointer-events-none"
                                 style={{ zIndex: 1 }}
                             >
-                                <span className="absolute -top-6 left-2 text-xs text-muted-foreground">
-                                    Área del restaurante ({mapWidth}x{mapHeight}px)
+                                <span className="absolute -top-6 left-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
+                                    Área Edición ({mapWidth}x{mapHeight}px)
                                 </span>
                             </div>
                         )}
 
-                        {/* Floor decorations */}
-                        <div className="absolute top-2 left-2 right-2 h-12 bg-muted/30 rounded-lg flex items-center justify-center text-muted-foreground text-sm">
-                            🚪 Entrada
-                        </div>
-                        <div className="absolute bottom-2 right-2 w-24 h-24 bg-muted/30 rounded-lg flex items-center justify-center text-muted-foreground text-sm">
-                            🍽️ Cocina
-                        </div>
-                        <div className="absolute bottom-2 left-2 w-32 h-16 bg-muted/30 rounded-lg flex items-center justify-center text-muted-foreground text-sm">
-                            🍹 Bar
+                        {/* Floor decorations - More subtle */}
+                        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-muted/20 to-transparent flex justify-center pt-2 pointer-events-none">
+                            <span className="text-xs font-bold text-muted-foreground/50 uppercase tracking-[0.2em]">Entrada Principal</span>
                         </div>
 
                         {/* Tables */}
                         {filteredMesas.length === 0 && !isLoading && isEditMode && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl bg-muted/20">
-                                <Layout className="w-12 h-12 text-muted-foreground mb-4 opacity-20" />
-                                <p className="text-muted-foreground font-medium">No hay mesas en {getZoneName(selectedZone)}</p>
-                                <Button variant="outline" className="mt-4" onClick={handleOpenCreateDialog}>
-                                    Agregar primera mesa
-                                </Button>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed border-muted rounded-2xl bg-muted/5 p-8 pointer-events-none">
+                                <Layout className="w-16 h-16 text-muted-foreground/20 mb-4" />
+                                <p className="text-muted-foreground font-medium text-lg">Zona vacía</p>
+                                <p className="text-sm text-muted-foreground/60 mb-6">Comienza a diseñar tu espacio</p>
                             </div>
                         )}
 
@@ -484,54 +586,81 @@ const TableMapOperativePage = () => {
                             <Tooltip key={mesa.id}>
                                 <TooltipTrigger asChild>
                                     <motion.div
-                                        drag={isEditMode}
-                                        dragMomentum={false}
-                                        dragConstraints={{
-                                            left: -(mesa.x || 0),
-                                            right: mapWidth - (mesa.x || 0) - (mesa.width || tableSize),
-                                            top: -(mesa.y || 0),
-                                            bottom: mapHeight - (mesa.y || 0) - (mesa.height || tableSize)
+                                        // Standard click-to-move implementation - NO DRAG
+                                        layout={false} // No automatic layout spring
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevent tracking click on map
+                                            handleMesaClick(mesa);
                                         }}
-                                        onDragStart={handleDragStart}
-                                        onDragEnd={(_, info) => handleDragEnd(mesa, info)}
-                                        initial={{ scale: 0 }}
+                                        initial={false}
                                         animate={{
-                                            scale: 1,
-                                            boxShadow: isEditMode ? '0 0 0 2px hsl(var(--primary))' : 'none'
+                                            scale: movingTableId === mesa.id ? 1.1 : 1,
+                                            boxShadow: isEditMode
+                                                ? (movingTableId === mesa.id
+                                                    ? '0 0 0 4px hsl(var(--primary) / 0.5), 0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                                    : '0 4px 6px -1px rgba(0, 0, 0, 0.1)')
+                                                : '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
                                         }}
-                                        whileHover={{ scale: isEditMode ? 1.05 : 1.1 }}
-                                        onClick={() => handleMesaClick(mesa)}
-                                        className={`${getMesaClasses(mesa.status)} ${isEditMode ? 'cursor-move' : ''}`}
+                                        transition={{ duration: 0.1 }}
+                                        whileHover={{
+                                            scale: isEditMode ? 1.05 : 1.02,
+                                            cursor: isEditMode ? 'pointer' : 'pointer'
+                                        }}
+                                        className={cn(
+                                            getMesaClasses(mesa.status),
+                                            isEditMode ? 'cursor-pointer' : '',
+                                            "border-2 transform-gpu transition-colors",
+                                            movingTableId === mesa.id ? "ring-2 ring-primary z-50 brightness-110" : "z-10"
+                                        )}
                                         style={{
                                             position: 'absolute',
                                             left: (mesa.x || 0) + 40,
                                             top: (mesa.y || 0) + 60,
                                             width: mesa.width || 60,
                                             height: mesa.height || 60,
-                                            borderRadius: mesa.shape === 'round' ? '50%' : '12px',
-                                            zIndex: 10
+                                            borderRadius: mesa.shape === 'round' ? '50%' : '16px',
                                         }}
                                     >
+                                        {/* Status Indicator Dot */}
+                                        <div className={cn(
+                                            "absolute top-2 right-2 w-2 h-2 rounded-full ring-2 ring-white/50",
+                                            mesa.status === 'disponible' && "bg-green-400",
+                                            mesa.status === 'ocupada' && "bg-red-400",
+                                            mesa.status === 'reservada' && "bg-blue-400",
+                                            mesa.status === 'pendiente' && "bg-yellow-400 animate-pulse"
+                                        )} />
+
                                         {isEditMode && (
-                                            <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full p-0.5">
-                                                <Move className="w-2 h-2" />
+                                            <div
+                                                className="absolute -top-2 -right-2 bg-primary text-primary-foreground rounded-full p-1 shadow-md scale-75 cursor-pointer hover:scale-100 transition-transform"
+                                                onClick={(e) => handleEditIconClick(e, mesa)}
+                                            >
+                                                <Edit className="w-3 h-3" />
                                             </div>
                                         )}
-                                        <span className="text-lg font-bold">{mesa.number}</span>
-                                        <span className="text-xs opacity-80">{mesa.capacity}p</span>
+
+                                        <span className="text-xl font-black tracking-tight drop-shadow-sm">{mesa.number}</span>
+                                        <span className="text-[10px] uppercase font-bold opacity-90">{mesa.capacity} pers</span>
                                     </motion.div>
                                 </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-xs">
+                                <TooltipContent side="top" className="max-w-xs bg-popover/95 backdrop-blur-sm border-2">
                                     <div className="space-y-1">
-                                        <p className="font-semibold">Mesa {mesa.number}</p>
+                                        <p className="font-bold flex items-center justify-between">
+                                            <span>Mesa {mesa.number}</span>
+                                            <Badge variant="outline" className="text-[10px] h-5">{getZoneName(mesa.zone || 'main')}</Badge>
+                                        </p>
                                         <p className="text-sm">Capacidad: {mesa.capacity} personas</p>
-                                        {isEditMode && <p className="text-[10px] text-primary italic">Click para editar • Arrastra para mover</p>}
+                                        {isEditMode && <p className="text-[10px] text-primary italic font-medium">✨ Arrastra para mover</p>}
                                         {!isEditMode && mesa.currentReservation && (
-                                            <div className="text-sm border-t pt-1 mt-1">
-                                                <p className="font-medium">{mesa.currentReservation.customerName}</p>
-                                                <p className="text-muted-foreground">
-                                                    {mesa.currentReservation.guests} personas
-                                                    {mesa.currentReservation.arrivedAt && ` • ${getTimeElapsed(mesa.currentReservation.arrivedAt)}`}
+                                            <div className="text-sm border-t pt-2 mt-2">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold">
+                                                        {mesa.currentReservation.customerName.charAt(0)}
+                                                    </div>
+                                                    <p className="font-semibold">{mesa.currentReservation.customerName}</p>
+                                                </div>
+                                                <p className="text-muted-foreground text-xs pl-8">
+                                                    {mesa.currentReservation.guests} pers • {mesa.currentReservation.arrivedAt && getTimeElapsed(mesa.currentReservation.arrivedAt)}
                                                 </p>
                                             </div>
                                         )}

@@ -27,7 +27,6 @@ import RestaurantDashboard from "./pages/admin/RestaurantDashboard";
 import ReservationsManagementPage from "./pages/admin/ReservationsManagementPage";
 import TableMapOperativePage from "./pages/admin/TableMapOperativePage";
 import ArrivalRegistrationPage from "./pages/admin/ArrivalRegistrationPage";
-import WaitlistPage from "./pages/admin/WaitlistPage";
 import OffersManagementPage from "./pages/admin/OffersManagementPage";
 import MenuManagementPage from "./pages/admin/MenuManagementPage";
 import ReviewsPage from "./pages/admin/ReviewsPage";
@@ -81,7 +80,6 @@ const App = () => (
                 <Route path="/admin/reservas" element={<ReservationsManagementPage />} />
                 <Route path="/admin/mesas" element={<TableMapOperativePage />} />
                 <Route path="/admin/llegadas" element={<ArrivalRegistrationPage />} />
-                <Route path="/admin/espera" element={<WaitlistPage />} />
                 <Route path="/admin/ofertas" element={<OffersManagementPage />} />
                 <Route path="/admin/menu" element={<MenuManagementPage />} />
                 <Route path="/admin/opiniones" element={<ReviewsPage />} />

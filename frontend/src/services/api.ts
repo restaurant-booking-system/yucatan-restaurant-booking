@@ -733,16 +733,8 @@ function generateTimeSlots(depositAmount: number, depositRequired: boolean, depo
 
 export const menuService = {
     async getByRestaurant(restaurantId: string): Promise<MenuItem[]> {
-        // Get token from localStorage
-        const session = localStorage.getItem('mesafeliz_restaurant_session');
-        const token = session ? JSON.parse(session).token : null;
-
-        const response = await fetch(`${API_BASE_URL}/admin/menu`, {
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token && { 'Authorization': `Bearer ${token}` })
-            }
-        });
+        // Use PUBLIC endpoint - doesn't require authentication
+        const response = await fetch(`${API_BASE_URL}/restaurants/${restaurantId}/menu`);
         const json = await response.json();
 
         if (!json.success) {

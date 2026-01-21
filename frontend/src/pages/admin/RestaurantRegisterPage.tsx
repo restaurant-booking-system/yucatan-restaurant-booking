@@ -50,15 +50,6 @@ const RestaurantRegisterPage = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Email verification state
-    const [emailVerified, setEmailVerified] = useState(false);
-    const [showVerifyModal, setShowVerifyModal] = useState(false);
-    const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
-    const [isSendingCode, setIsSendingCode] = useState(false);
-    const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-    const [verifyError, setVerifyError] = useState('');
-    const [codeSent, setCodeSent] = useState(false);
-
     // Form data
     const [formData, setFormData] = useState({
         // Account
@@ -92,98 +83,6 @@ const RestaurantRegisterPage = () => {
         }
     };
 
-    // Email verification functions
-    const handleSendVerificationCode = async () => {
-        if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-            setErrors(prev => ({ ...prev, email: 'Ingresa un correo válido' }));
-            return;
-        }
-
-        setIsSendingCode(true);
-        try {
-            const response = await fetch(`${API_BASE_URL}/verification/send-code`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: formData.email })
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                setCodeSent(true);
-                setShowVerifyModal(true);
-                setVerifyError('');
-                toast.success('Código enviado a tu correo');
-            } else {
-                toast.error(data.error || 'Error al enviar código');
-            }
-        } catch (error) {
-            console.error('Error sending verification code:', error);
-            toast.error('Error al enviar el código');
-        } finally {
-            setIsSendingCode(false);
-        }
-    };
-
-    const handleVerifyCode = async () => {
-        const code = verificationCode.join('');
-        if (code.length !== 6) {
-            setVerifyError('Ingresa el código completo');
-            return;
-        }
-
-        setIsVerifyingCode(true);
-        setVerifyError('');
-        try {
-            const response = await fetch(`${API_BASE_URL}/verification/verify-code`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: formData.email, code })
-            });
-            const data = await response.json();
-
-            if (data.success && data.verified) {
-                setEmailVerified(true);
-                setShowVerifyModal(false);
-                toast.success('¡Correo verificado exitosamente!');
-            } else {
-                setVerifyError(data.error || 'Código incorrecto');
-            }
-        } catch (error) {
-            console.error('Error verifying code:', error);
-            setVerifyError('Error al verificar el código');
-        } finally {
-            setIsVerifyingCode(false);
-        }
-    };
-
-    const handleCodeInput = (index: number, value: string) => {
-        if (value.length > 1) value = value.slice(-1);
-        if (!/^\d*$/.test(value)) return;
-
-        const newCode = [...verificationCode];
-        newCode[index] = value;
-        setVerificationCode(newCode);
-
-        // Auto-focus next input
-        if (value && index < 5) {
-            const nextInput = document.getElementById(`code-${index + 1}`);
-            nextInput?.focus();
-        }
-    };
-
-    const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
-        if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
-            const prevInput = document.getElementById(`code-${index - 1}`);
-            prevInput?.focus();
-        }
-    };
-
-    const handleResendCode = async () => {
-        setVerificationCode(['', '', '', '', '', '']);
-        setVerifyError('');
-        await handleSendVerificationCode();
-    };
-
     // Address change handler
     const handleAddressChange = (address: string, details?: { lat: number; lon: number; zone?: string }) => {
         updateField('address', address);
@@ -206,7 +105,6 @@ const RestaurantRegisterPage = () => {
             else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
                 newErrors.email = 'Correo inválido';
             }
-            // Note: email verification is handled in handleNext, not here
             if (!formData.phone.trim()) newErrors.phone = 'El teléfono es requerido';
             if (!formData.password) newErrors.password = 'La contraseña es requerida';
             else if (formData.password.length < 6) {
@@ -235,12 +133,6 @@ const RestaurantRegisterPage = () => {
 
     const handleNext = async () => {
         if (!validateStep()) return;
-
-        // If on step 1 and email not verified, trigger verification
-        if (step === 'account' && !emailVerified) {
-            await handleSendVerificationCode();
-            return; // Don't advance, wait for verification
-        }
 
         const steps: RegistrationStep[] = ['account', 'restaurant', 'details', 'confirm'];
         const currentIndex = steps.indexOf(step);
@@ -390,7 +282,7 @@ const RestaurantRegisterPage = () => {
                                     {errors.ownerName && <p className="text-xs text-destructive">{errors.ownerName}</p>}
                                 </div>
 
-                                {/* Email with verification */}
+                                {/* Email without verification */}
                                 <div className="space-y-2">
                                     <Label htmlFor="email" className="flex items-center gap-2">
                                         <Mail className="w-4 h-4 text-muted-foreground" />
@@ -402,29 +294,11 @@ const RestaurantRegisterPage = () => {
                                             type="email"
                                             placeholder="correo@ejemplo.com"
                                             value={formData.email}
-                                            onChange={(e) => {
-                                                updateField('email', e.target.value);
-                                                if (emailVerified) setEmailVerified(false);
-                                            }}
-                                            disabled={emailVerified}
-                                            className={`${errors.email ? 'border-destructive' : ''} ${emailVerified ? 'pr-10 bg-green-50 border-green-500' : ''}`}
+                                            onChange={(e) => updateField('email', e.target.value)}
+                                            className={errors.email ? 'border-destructive' : ''}
                                         />
-                                        {emailVerified && (
-                                            <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-600" />
-                                        )}
                                     </div>
                                     {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
-                                    {emailVerified && (
-                                        <p className="text-xs text-green-600 flex items-center gap-1">
-                                            <CheckCircle2 className="w-3 h-3" />
-                                            Correo verificado correctamente
-                                        </p>
-                                    )}
-                                    {!emailVerified && !errors.email && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Se verificará al dar clic en "Continuar"
-                                        </p>
-                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -647,7 +521,6 @@ const RestaurantRegisterPage = () => {
                                         <span className="text-muted-foreground">Email:</span>
                                         <span className="flex items-center gap-1">
                                             {formData.email}
-                                            <CheckCircle2 className="w-4 h-4 text-green-600" />
                                         </span>
                                         <span className="text-muted-foreground">Teléfono:</span>
                                         <span>{formData.phone}</span>
@@ -738,66 +611,6 @@ const RestaurantRegisterPage = () => {
             </main>
 
             <Footer />
-
-            {/* Email Verification Modal */}
-            <Dialog open={showVerifyModal} onOpenChange={setShowVerifyModal}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-center">Verifica tu correo</DialogTitle>
-                        <DialogDescription className="text-center">
-                            Enviamos un código de 6 dígitos a<br />
-                            <strong>{formData.email}</strong>
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-6 py-4">
-                        {/* 6-digit code input */}
-                        <div className="flex justify-center gap-2">
-                            {verificationCode.map((digit, index) => (
-                                <Input
-                                    key={index}
-                                    id={`code-${index}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={1}
-                                    value={digit}
-                                    onChange={(e) => handleCodeInput(index, e.target.value)}
-                                    onKeyDown={(e) => handleCodeKeyDown(index, e)}
-                                    className="w-12 h-14 text-center text-2xl font-bold"
-                                />
-                            ))}
-                        </div>
-
-                        {verifyError && (
-                            <p className="text-sm text-destructive text-center">{verifyError}</p>
-                        )}
-
-                        <Button
-                            onClick={handleVerifyCode}
-                            disabled={isVerifyingCode || verificationCode.join('').length !== 6}
-                            className="w-full"
-                        >
-                            {isVerifyingCode ? (
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            ) : (
-                                <Check className="w-4 h-4 mr-2" />
-                            )}
-                            Verificar código
-                        </Button>
-
-                        <div className="text-center">
-                            <Button
-                                variant="link"
-                                onClick={handleResendCode}
-                                disabled={isSendingCode}
-                                className="text-sm"
-                            >
-                                ¿No recibiste el código? Reenviar
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 };
